@@ -1,0 +1,40 @@
+name: Integration
+
+on:
+  workflow_dispatch:
+
+jobs:
+  integration-tests:
+    name: Integration tests (py3.12 on Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Create .env from GitHub Secrets
+        shell: pwsh
+        run: |
+          @"
+          CONNX_DSN=${{ secrets.CONNX_DSN }}
+          CONNX_USER=${{ secrets.CONNX_USER }}
+          CONNX_PASS=${{ secrets.CONNX_PASS }}
+          "@ | Out-File -Encoding ascii .env
+
+      - name: Run integration tests
+        shell: pwsh
+        run: |
+          pytest -m integration -q
