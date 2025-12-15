@@ -80,10 +80,41 @@ SELECT CUSTOMER_ID, CUSTOMER_NAME
 FROM CUSTOMERS
 WHERE STATE = 'CA'
 ```
+## update_connx
+```python
+@mcp.tool()
+async def update_connx(operation: str, query: str) -> Dict[str, Any]:
+```
+## Purpose
+Executes data-modifying SQL statements (INSERT, UPDATE, DELETE) via CONNX.
+
+## Parameters
+	•	operation (str): One of insert, update, delete
+	•	query (str): Full SQL statement
+
+## Behavior
+	•	Validates the operation type before execution
+	•	Executes inside a transaction
+	•	Commits on success, rolls back on failure
+
+## Return format
+```python
+{
+  "affected_rows": 5,
+  "message": "Update completed successfully."
+}
+```
+## Example
+```sql
+UPDATE CUSTOMERS
+SET STATUS = 'INACTIVE'
+WHERE LAST_LOGIN < '2022-01-01'
+```
+
 ---
 
 ## Integrate in MCP host config:
-```python
+```json
 @mcp.tool()
 async def query_connx(query: str) -> Dict[str, Any]:
 
@@ -106,7 +137,24 @@ Coverage includes connection handling, query/update execution, sanitization, and
 	  }
 	}
 ```
+
+## Summary
+- query_connx is used for read-only SQL queries
+- update_connx is used for data modification
+- tools are asynchronous, safe, and testable
+- extending the toolset follows a simple, repeatable pattern
+- CI and test coverage protect against regressions
 ---
+## Extending MCP Tools
+
+Adding new tools is intentionally simple and testable.
+
+General Pattern:
+1. Create a Python function
+2. Decorate it with @mcp.tool()
+3. Call existing helper functions (execute_query_async, execute_update_async)
+4. Return a JSON-serializable dictionary
+
 ## Example: Add a count_connx Tool
 
 ```python
@@ -132,13 +180,4 @@ async def count_connx(table_name: str) -> Dict[str, Any]:
   "table": "CUSTOMERS"
 }
 ```
----
-## Extending MCP Tools
 
-Adding new tools is intentionally simple and testable.
-
-General Pattern:
-1. Create a Python function
-2. Decorate it with @mcp.tool()
-3. Call existing helper functions (execute_query_async, execute_update_async)
-4. Return a JSON-serializable dictionary
