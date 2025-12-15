@@ -1,4 +1,5 @@
 # tests/test_server.py
+import os
 import unittest
 import importlib
 import sys
@@ -57,6 +58,7 @@ class TestSanitizeInput(unittest.TestCase):
 
 
 class TestConnxConnection(unittest.TestCase):
+    @patch.dict(os.environ, {"CONNX_DSN": "dummy", "CONNX_USER": "dummy", "CONNX_PASS": "dummy"}, clear=False)
     @patch(f"{MODULE_UNDER_TEST}.pyodbc.connect")
     def test_get_connx_connection_success(self, mock_connect):
         fake_conn = MagicMock()
@@ -66,6 +68,7 @@ class TestConnxConnection(unittest.TestCase):
         self.assertIs(conn, fake_conn)
         mock_connect.assert_called_once()
 
+    @patch.dict(os.environ, {"CONNX_DSN": "dummy", "CONNX_USER": "dummy", "CONNX_PASS": "dummy"}, clear=False)
     @patch(f"{MODULE_UNDER_TEST}.pyodbc.connect")
     def test_get_connx_connection_failure_raises_value_error(self, mock_connect):
         mock_connect.side_effect = pyodbc.Error("nope")
