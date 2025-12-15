@@ -1,0 +1,16 @@
+{
+  "connx": {
+    "dsn": "demo64",
+    "user": "sag",
+    "password": "sag",
+    "default_database": "",
+    "schema_prefix": ""
+  },
+  "safety": {
+    "allow_ddl": false,
+    "allow_dml": false
+  },
+  "logging": {
+    "level": "INFO"
+  }
+}

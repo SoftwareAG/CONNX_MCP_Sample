@@ -1,0 +1,23 @@
+{
+  "connx": {
+    "dsn": "demo64",
+    "user": "sag",
+    "password": "sag",
+    "default_database": ""
+  },
+  "safety": {
+    "allow_ddl": false,
+    "allow_dml": false,
+    "max_rows": 200,
+    "allowed_tables": [
+      "customers_db2",
+      "daeadb2d.dbo.orders_db2",
+      "daeadb2d.dbo.products_db2"
+    ],
+    "masked_columns": [
+      "ssn",
+      "email",
+      "phone"
+    ]
+  }
+}

@@ -1,0 +1,3 @@
+{"jsonrpc":"2.0","id":1,"method":"tools/connx_list_tables","params":{}}
+{"jsonrpc":"2.0","id":2,"method":"tools/connx_describe_table","params":{"table_name":"CUSTOMERS_DB2"}}
+{"jsonrpc":"2.0","id":3,"method":"tools/connx_query_safe","params":{"sql":"SELECT CUSTOMERID, CUSTOMERNAME FROM DAEADB2D.dbo.CUSTOMERS_DB2 {maxrows 5}"}}
