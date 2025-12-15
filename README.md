@@ -145,10 +145,11 @@ Below are examples of how MCP-compatible clients (such as Claude Desktop or othe
 ```
 ---
 
-## Integrate in MCP host config:
-```json
+## Integrate in MCP host config
+```python
 @mcp.tool()
 async def query_connx(query: str) -> Dict[str, Any]:
+```
 
 # Testing
 This project uses pytest for unit testing. Tests mock database interactions to run without a real CONNX setup.
@@ -158,16 +159,16 @@ This project uses pytest for unit testing. Tests mock database interactions to r
 
 Coverage includes connection handling, query/update execution, sanitization, and MCP tools/resources.
 
-# Integrate in MCP host config:
-	```json
-	{
-	  "mcpServers": {
-		"connx-database-server": {
-		  "command": "python",
-		  "args": ["connx_server.py"]
-		}
-	  }
+## Integrate in MCP host config
+```json
+{
+  "mcpServers": {
+	"connx-database-server": {
+	  "command": "python",
+	  "args": ["connx_server.py"]
 	}
+  }
+}
 ```
 
 ## Summary
