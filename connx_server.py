@@ -27,10 +27,11 @@ def _assert_config():
     if missing:
         raise RuntimeError(f"Missing required config values: {', '.join(missing)}")
 
-_assert_config()
+
 
 def get_connx_connection():
     """Establish a connection to CONNX via pyodbc."""
+    _assert_config()
     conn_str = f"DSN={CONNX_DSN};UID={CONNX_USER};PWD={CONNX_PASS}"
     try:
         conn = pyodbc.connect(conn_str)
