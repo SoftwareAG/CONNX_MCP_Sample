@@ -1,3 +1,5 @@
+![CI](https://github.com/djecon-sag/CONNX_MCP_Sample/actions/workflows/ci.yml/badge.svg)
+
 # CONNX MCP Server
 
 An unofficial MCP (Model Context Protocol) server for integrating with CONNX databases. This allows AI agents (e.g., Claude) to securely query and update data via standardized tools.
