@@ -10,6 +10,7 @@
 - [MCP Tools](#mcp-tools)
   - [`query_connx`](#query_connx)
   - [`update_connx`](#update_connx)
+  - [`find_customers`](#find_customers)
 - [MCP Client Examples](#mcp-client-examples)
 - [Extending MCP Tools](#extending-mcp-tools)
 - [Summary](#summary)
@@ -18,7 +19,10 @@
 
 ## CONNX MCP Server
 
-An unofficial MCP (Model Context Protocol) server for integrating with CONNX databases. This allows AI agents (e.g., Claude) to securely query and update data via standardized tools.
+This project is a demonstration and reference implementation intended to show how an MCP server can be structured, configured, and hosted locally to enable AI-assisted access to CONNX data.
+
+The server is not intended to be a complete or hardened production solution. Instead, it provides a focused, minimal example of MCP concepts, including tool definitions, resource exposure, ANSI SQL-92 query patterns, and safe interaction with legacy data sources.
+
 
 ## Features
 - ODBC connection to CONNX for unified database access.
@@ -64,7 +68,9 @@ connection_string = (
 **Security Note**: Never commit credentials to version control. Always use environment variables or secure credential management in production.
 
 ## Usage
-Run: `python connx_server.py`
+This server is designed to be launched by an MCP host (e.g., Claude Desktop) using stdio transport.
+
+You typically do not run it manually except for smoke testing.
 
 ---
 ## MCP Tools
@@ -99,7 +105,6 @@ Executes a SQL SELECT statement against a CONNX-connected database and returns t
   "count": 10
 }
 ```
-
 **Example**
 ```sql
 SELECT CUSTOMER_ID, CUSTOMER_NAME
@@ -139,6 +144,26 @@ WHERE LAST_LOGIN < '2022-01-01'
 ```
 
 ---
+### find_customers
+
+Purpose-built helper tool for querying customers by location.
+
+Arguments
+```json
+{
+  "state": "Virginia",
+  "city": "Richmond",
+  "max_rows": 100
+}
+```
+Notes
+
+- Normalizes full state names to abbreviations
+- Handles fixed-width VSAM CHAR columns
+- ANSI SQL-92 compatible
+---
+
+
 ## MCP Client Examples
 
 Below are examples of how MCP-compatible clients (such as Claude Desktop or other MCP hosts) can invoke the CONNX MCP Server.
@@ -226,21 +251,156 @@ Coverage includes connection handling, query/update execution, sanitization, and
 
 ## Integrate in MCP Host Config
 
-To integrate this server with an MCP-compatible client (e.g., Claude Desktop), add the following to your MCP host configuration:
+To integrate this server with an MCP-compatible client, you need to add the server configuration to your MCP host settings.
+
+### Claude Desktop Integration
+
+Claude Desktop uses a configuration file to manage MCP servers. Follow these steps:
+
+#### 1. Locate the Configuration File
+
+**Windows:**
+```
+%APPDATA%\Claude\claude_desktop_config.json
+```
+Full path example: `C:\Users\YourUsername\AppData\Roaming\Claude\claude_desktop_config.json`
+
+**macOS:**
+```
+~/Library/Application Support/Claude/claude_desktop_config.json
+```
+
+**Linux:**
+```
+~/.config/Claude/claude_desktop_config.json
+```
+
+#### 2. Edit the Configuration File
+
+Open `claude_desktop_config.json` in a text editor and add the CONNX MCP server configuration:
 
 ```json
 {
   "mcpServers": {
     "connx-database-server": {
       "command": "python",
-      "args": ["connx_server.py"]
+      "args": [
+        "C:\\path\\to\\connx_server.py"
+      ],
+      "env": {
+        "CONNX_DSN": "your_dsn_name",
+        "CONNX_USER": "your_username",
+        "CONNX_PASSWORD": "your_password"
+      }
     }
   }
 }
 ```
 
----
+**Important Notes:**
+- Use absolute paths for the Python script
+- On Windows, use double backslashes (`\\`) in paths or forward slashes (`/`)
+- Environment variables can be set directly in the config or loaded from a `.env` file
+- If you already have other MCP servers configured, add the `connx-database-server` entry to the existing `mcpServers` object
 
+#### 3. Example with Multiple Servers
+
+If you have multiple MCP servers:
+
+```json
+{
+  "mcpServers": {
+    "connx-database-server": {
+      "command": "python",
+      "args": ["C:\\projects\\connx-mcp-server\\connx_server.py"],
+      "env": {
+        "CONNX_DSN": "PROD_DB",
+        "CONNX_USER": "app_user",
+        "CONNX_PASSWORD": "secure_password"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:\\Users\\YourName\\Documents"]
+    }
+  }
+}
+```
+
+#### 4. Using Python Virtual Environment
+
+If you're using a virtual environment for your Python dependencies:
+
+**Windows:**
+```json
+{
+  "mcpServers": {
+    "connx-database-server": {
+      "command": "C:\\path\\to\\venv\\Scripts\\python.exe",
+      "args": ["C:\\path\\to\\connx_server.py"],
+      "env": {
+        "CONNX_DSN": "your_dsn_name"
+      }
+    }
+  }
+}
+```
+
+**macOS/Linux:**
+```json
+{
+  "mcpServers": {
+    "connx-database-server": {
+      "command": "/path/to/venv/bin/python",
+      "args": ["/path/to/connx_server.py"],
+      "env": {
+        "CONNX_DSN": "your_dsn_name"
+      }
+    }
+  }
+}
+```
+
+#### 5. Restart Claude Desktop
+
+After saving the configuration file, restart Claude Desktop completely:
+1. Quit Claude Desktop (not just close the window)
+2. Reopen Claude Desktop
+3. The CONNX MCP server should now be available
+
+#### 6. Verify the Integration
+
+In Claude Desktop, you can test the integration by asking:
+- "What tools are available?"
+- "Query the CUSTOMERS table from CONNX"
+- "Show me the first 5 records from the ORDERS table"
+
+If the server is properly configured, Claude will be able to use the `query_connx` and `update_connx` tools to interact with your CONNX databases.
+
+### Troubleshooting Claude Desktop Integration
+
+**Server Not Appearing:**
+- Check that the JSON syntax is valid (use a JSON validator)
+- Verify the Python path is correct and accessible
+- Ensure all required environment variables are set
+- Check Claude Desktop logs for errors
+
+**Connection Errors:**
+- Verify CONNX DSN is configured in your system
+- Test the connection using the smoke test script
+- Check that credentials are correct
+- Ensure CONNX service is running
+
+---
+## Example query using Claude Desktop
+
+
+This example queries a Mainframe VSAM file. Claude Desktop formulates the SQL statement that is passed to CONNX. 
+CONNX communicates with VSAM on the z/OS Mainframe.
+
+
+   ![img.png](images/select_customers.png)
+---
 ## Summary
 - `query_connx` is used for read-only SQL queries
 - `update_connx` is used for data modification
@@ -373,3 +533,15 @@ This bidirectional flow ensures efficient, secure interactions. Real-world examp
 - **Credential Management**: Use environment variables or secret management services (AWS Secrets Manager, Azure Key Vault)
 - **Network Security**: Use VPN or private networks for database connections
 - **Rate Limiting**: Consider implementing rate limits for MCP tool invocations
+
+---
+## Disclaimer
+
+This project is provided as-is, without warranty of any kind.
+
+It is intended as:
+*   	A learning resource
+*   	A reference implementation
+*   	A starting point for secure MCP server development
+
+It is not intended to replace enterprise-grade security controls.

@@ -1,32 +1,63 @@
 import asyncio
+import hashlib
 import logging
-import re
+import os
 from typing import Any, Dict, List, Optional
 
 import pyodbc
-from mcp.server.fastmcp import FastMCP  # Assuming FastMCP is installed via mcp[cli] or separately
-
 from dotenv import load_dotenv
-import os
+from mcp.server.fastmcp import FastMCP
 
-load_dotenv()  # loads .env from current working directory
+# Load .env from current working directory (if present).
+# Host-provided environment variables still override .env values.
+load_dotenv()
 
-CONNX_DSN = os.getenv("CONNX_DSN", "Share_2025")
-CONNX_USER = os.getenv("CONNX_USER", "sag")
-CONNX_PASS = os.getenv("CONNX_PASS", "sag")
+# Required configuration (no unsafe defaults)
+CONNX_DSN = os.getenv("CONNX_DSN")
+CONNX_USER = os.getenv("CONNX_USER")
+CONNX_PASS = os.getenv("CONNX_PASS")
+
+# Optional security controls
+CONNX_ALLOW_WRITES = os.getenv("CONNX_ALLOW_WRITES", "false").strip().lower() == "true"
 
 # Setup logging (log to stderr to avoid interfering with MCP stdout)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # MCP Server Initialization
 mcp = FastMCP("connx-database-server")
 
-def _assert_config():
+
+def _assert_config() -> None:
     missing = [k for k in ("CONNX_DSN", "CONNX_USER", "CONNX_PASS") if not os.getenv(k)]
     if missing:
         raise RuntimeError(f"Missing required config values: {', '.join(missing)}")
 
+
+def _sql_fingerprint(sql: str) -> str:
+    """Short stable fingerprint for logs without leaking SQL text."""
+    digest = hashlib.sha256(sql.encode("utf-8", errors="ignore")).hexdigest()
+    return digest[:12]
+
+
+def _is_single_statement(sql: str) -> bool:
+    """
+    Basic single-statement check.
+    - Reject semicolons to avoid multi-statement batches.
+    - Strip whitespace.
+    """
+    s = (sql or "").strip()
+    return bool(s) and (";" not in s)
+
+
+def _is_select_only(sql: str) -> bool:
+    """
+    Enforce SELECT-only for query tool.
+    ANSI SQL-92 doesn't include WITH; keep it simple for safety.
+    If you need WITH/CTEs later, expand this carefully.
+    """
+    s = (sql or "").lstrip().lower()
+    return s.startswith("select")
 
 
 def get_connx_connection():
@@ -38,15 +69,8 @@ def get_connx_connection():
         logger.info("Successfully connected to CONNX")
         return conn
     except pyodbc.Error as e:
-        logger.error(f"Connection failed: {e}")
+        logger.error("Connection failed: %s", e)
         raise ValueError(f"Failed to connect to CONNX: {str(e)}")
-
-
-def sanitize_input(input_str: str) -> str:
-    """Basic sanitization to prevent SQL injection (use with parameterized queries)."""
-    # Remove common injection patterns, including full comments
-    return re.sub(r'(--.*|;|/\*.*\*/|DROP|ALTER|EXEC|UNION|SELECT\s+.*\s+FROM\s+INFORMATION_SCHEMA)', '', input_str,
-                  flags=re.IGNORECASE)
 
 
 async def execute_query_async(query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
@@ -58,15 +82,21 @@ async def execute_query_async(query: str, params: Optional[List[Any]] = None) ->
 def execute_query(query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
     """Execute SELECT query and return results as list of dicts."""
     conn = get_connx_connection()
+    fp = _sql_fingerprint(query)
     try:
         cursor = conn.cursor()
-        cursor.execute(sanitize_input(query), params or [])
+        cursor.execute(query, params or [])
+        if cursor.description is None:
+            # A SELECT should provide a description; if not, treat as an error.
+            raise ValueError("Query did not return a result set (cursor.description is None).")
+
         columns = [desc[0] for desc in cursor.description]
-        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        logger.info(f"Query executed successfully: {query}")
+        rows = cursor.fetchall()
+        results = [dict(zip(columns, row)) for row in rows]
+        logger.info("Query OK fp=%s rows=%d", fp, len(results))
         return results
-    except pyodbc.Error as e:
-        logger.error(f"Query failed: {e}")
+    except (pyodbc.Error, ValueError) as e:
+        logger.error("Query failed fp=%s err=%s", fp, e)
         raise ValueError(f"Query execution failed: {str(e)}")
     finally:
         conn.close()
@@ -81,16 +111,17 @@ async def execute_update_async(query: str, params: Optional[List[Any]] = None) -
 def execute_update(query: str, params: Optional[List[Any]] = None) -> int:
     """Execute non-SELECT query and return affected rows."""
     conn = get_connx_connection()
+    fp = _sql_fingerprint(query)
     try:
         cursor = conn.cursor()
-        cursor.execute(sanitize_input(query), params or [])
+        cursor.execute(query, params or [])
         affected = cursor.rowcount
         conn.commit()
-        logger.info(f"Update executed successfully: {query}, affected rows: {affected}")
-        return affected
+        logger.info("Update OK fp=%s affected=%s", fp, affected)
+        return int(affected) if affected is not None else 0
     except pyodbc.Error as e:
         conn.rollback()
-        logger.error(f"Update failed: {e}")
+        logger.error("Update failed fp=%s err=%s", fp, e)
         raise ValueError(f"Update execution failed: {str(e)}")
     finally:
         conn.close()
@@ -102,12 +133,15 @@ async def query_connx(query: str) -> Dict[str, Any]:
     """
     Query data from CONNX-connected databases using SQL.
 
-    Args:
-        query: SQL SELECT statement (e.g., 'SELECT * FROM Sales WHERE Region = ?')
-
-    Returns:
-        Dict with 'results' (list of dicts) and 'count'.
+    Security:
+    - Enforces single-statement SELECT-only.
+    - Use parameterized queries for values (preferred via purpose-built tools).
     """
+    if not _is_single_statement(query):
+        return {"error": "Only a single SQL statement is allowed (no semicolons)."}
+    if not _is_select_only(query):
+        return {"error": "Only SELECT statements are allowed for query_connx."}
+
     try:
         results = await execute_query_async(query)
         return {"results": results, "count": len(results)}
@@ -120,15 +154,19 @@ async def update_connx(operation: str, query: str) -> Dict[str, Any]:
     """
     Perform update operations via CONNX.
 
-    Args:
-        operation: 'insert', 'update', or 'delete'
-        query: Full SQL statement for the operation
-
-    Returns:
-        Dict with 'affected_rows' or 'error'.
+    Security:
+    - Writes are disabled unless CONNX_ALLOW_WRITES=true.
+    - Enforces single-statement execution.
     """
-    if operation.lower() not in ['insert', 'update', 'delete']:
+    if not CONNX_ALLOW_WRITES:
+        return {"error": "Writes are disabled. Set CONNX_ALLOW_WRITES=true to enable update operations."}
+
+    if operation.lower() not in ["insert", "update", "delete"]:
         return {"error": "Invalid operation. Must be 'insert', 'update', or 'delete'."}
+
+    if not _is_single_statement(query):
+        return {"error": "Only a single SQL statement is allowed (no semicolons)."}
+
     try:
         affected = await execute_update_async(query)
         return {"affected_rows": affected, "message": f"{operation.capitalize()} completed successfully."}
@@ -136,7 +174,7 @@ async def update_connx(operation: str, query: str) -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-# 1) Base schema resource (no params)
+# MCP Resources
 @mcp.resource("schema://schema")
 async def get_schema() -> Dict[str, Any]:
     query = "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS"
@@ -147,7 +185,6 @@ async def get_schema() -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-# 2) Parameterized schema resource (path param)
 @mcp.resource("schema://schema/{table_name}")
 async def get_schema_for_table(table_name: str) -> Dict[str, Any]:
     query = (
@@ -161,6 +198,7 @@ async def get_schema_for_table(table_name: str) -> Dict[str, Any]:
     except ValueError as e:
         return {"error": str(e)}
 
+
 # Optional helper: map full state names to 2-letter codes (extend as needed)
 STATE_NAME_TO_CODE = {
     "virginia": "VA",
@@ -171,6 +209,7 @@ STATE_NAME_TO_CODE = {
     # add more as you want
 }
 
+
 def _normalize_state(state: str) -> str:
     s = (state or "").strip()
     if not s:
@@ -179,11 +218,7 @@ def _normalize_state(state: str) -> str:
 
 
 @mcp.tool()
-async def find_customers(
-    state: str,
-    city: Optional[str] = None,
-    max_rows: int = 100
-) -> Dict[str, Any]:
+async def find_customers(state: str, city: Optional[str] = None, max_rows: int = 100) -> Dict[str, Any]:
     """
     Find customers by state and optional city.
 
@@ -218,7 +253,6 @@ async def find_customers(
     try:
         results = await execute_query_async(sql, params=params)
 
-        # Soft limit in Python (ANSI SQL-92 compatible)
         truncated = False
         if max_rows and max_rows > 0 and len(results) > max_rows:
             results = results[:max_rows]
@@ -227,6 +261,7 @@ async def find_customers(
         return {"results": results, "count": len(results), "truncated": truncated}
     except ValueError as e:
         return {"error": str(e)}
+
 
 # Main Entry Point
 if __name__ == "__main__":
