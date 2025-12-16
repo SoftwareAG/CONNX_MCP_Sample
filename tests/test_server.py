@@ -245,6 +245,176 @@ class TestMcpToolFunctions(unittest.IsolatedAsyncioTestCase):
         # execute_query_async(query, params=[table_name]) -> params should be in kwargs
         self.assertEqual(kwargs.get("params"), ["Sales"])
 
+    async def test_query_connx_rejects_semicolons(self):
+        out = await mod.query_connx("SELECT 1; SELECT 2")
+        self.assertIn("error", out)
+        self.assertIn("single sql statement", out["error"].lower())
+
+    async def test_query_connx_rejects_non_select(self):
+        out = await mod.query_connx("UPDATE T SET A=1")
+        self.assertIn("error", out)
+        self.assertIn("only select", out["error"].lower())
+
+    @patch(f"{MODULE_UNDER_TEST}.execute_query_async")
+    async def test_query_connx_returns_error_dict_on_value_error(self, mock_exec):
+        mock_exec.side_effect = ValueError("no db")
+        out = await mod.query_connx("SELECT * FROM T")
+        self.assertIn("error", out)
+        self.assertIn("no db", out["error"].lower())
+
+    async def test_update_connx_rejects_when_writes_disabled(self):
+        # CI will hit this branch unless you patch CONNX_ALLOW_WRITES=True
+        out = await mod.update_connx("update", "UPDATE T SET A=1")
+        self.assertIn("error", out)
+        self.assertIn("writes are disabled", out["error"].lower())
+
+    @patch(f"{MODULE_UNDER_TEST}.CONNX_ALLOW_WRITES", True)
+    async def test_update_connx_invalid_operation_when_writes_enabled(self):
+        # Covers the "invalid operation" branch (only reachable if writes enabled)
+        out = await mod.update_connx("merge", "UPDATE T SET A=1")
+        self.assertIn("error", out)
+        self.assertIn("invalid operation", out["error"].lower())
+
+    @patch(f"{MODULE_UNDER_TEST}.CONNX_ALLOW_WRITES", True)
+    async def test_update_connx_rejects_semicolons_when_writes_enabled(self):
+        # Covers "single statement" guard inside update tool
+        out = await mod.update_connx("update", "UPDATE T SET A=1; UPDATE T SET A=2")
+        self.assertIn("error", out)
+        self.assertIn("single sql statement", out["error"].lower())
+
+    @patch(f"{MODULE_UNDER_TEST}.CONNX_ALLOW_WRITES", True)
+    @patch(f"{MODULE_UNDER_TEST}.execute_update_async")
+    async def test_update_connx_error_when_writes_enabled(self, mock_exec):
+        # Covers update_connx except ValueError -> {"error": ...}
+        mock_exec.side_effect = ValueError("bad update")
+        out = await mod.update_connx("delete", "DELETE FROM T")
+        self.assertIn("error", out)
+        self.assertIn("bad update", out["error"].lower())
+
+    @patch(f"{MODULE_UNDER_TEST}.execute_query_async")
+    async def test_get_schema_returns_error_dict_on_value_error(self, mock_exec):
+        # Covers get_schema except ValueError -> {"error": ...}
+        mock_exec.side_effect = ValueError("schema fail")
+        out = await mod.get_schema()
+        self.assertIn("error", out)
+        self.assertIn("schema fail", out["error"].lower())
+
+    @patch(f"{MODULE_UNDER_TEST}.execute_query_async")
+    async def test_get_schema_for_table_returns_error_dict_on_value_error(self, mock_exec):
+        # Covers get_schema_for_table except ValueError -> {"error": ...}
+        mock_exec.side_effect = ValueError("schema table fail")
+        out = await mod.get_schema_for_table("CUSTOMERS_VSAM")
+        self.assertIn("error", out)
+        self.assertIn("schema table fail", out["error"].lower())
+
+    @patch(f"{MODULE_UNDER_TEST}.execute_query_async")
+    async def test_find_customers_error_returns_error_dict(self, mock_exec):
+        # Covers find_customers except ValueError -> {"error": ...}
+        mock_exec.side_effect = ValueError("boom")
+        out = await mod.find_customers("VA")
+        self.assertIn("error", out)
+        self.assertIn("boom", out["error"].lower())
+
+    @patch(f"{MODULE_UNDER_TEST}.execute_query_async")
+    async def test_find_customers_truncates_results(self, mock_exec):
+        # Covers truncation branch
+        mock_exec.return_value = [{"CUSTOMERID": "1"}] * 105
+        out = await mod.find_customers("VA", max_rows=100)
+        self.assertEqual(out["count"], 100)
+        self.assertTrue(out["truncated"])
+        self.assertEqual(len(out["results"]), 100)
+
+class TestConfig(unittest.TestCase):
+    def test_assert_config_raises_when_missing(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(RuntimeError) as ctx:
+                mod._assert_config()
+        self.assertIn("missing required config values", str(ctx.exception).lower())
+
+class TestFindCustomers(unittest.IsolatedAsyncioTestCase):
+    @patch(f"{MODULE_UNDER_TEST}.execute_query_async")
+    async def test_find_customers_builds_query_and_params_state_only(self, mock_exec):
+        mock_exec.return_value = [{"CUSTOMERID": "A"}]
+
+        out = await mod.find_customers("Virginia")  # should normalize to VA
+        self.assertIn("results", out)
+        self.assertEqual(out["count"], 1)
+
+        args, kwargs = mock_exec.call_args
+        sql_sent = args[0]
+        params_sent = kwargs.get("params")
+
+        self.assertIn("FROM daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM", sql_sent)
+        self.assertIn("CUSTOMERSTATE", sql_sent.upper())
+        self.assertEqual(params_sent, ["VA"])
+
+    @patch(f"{MODULE_UNDER_TEST}.execute_query_async")
+    async def test_find_customers_includes_city_filter_when_provided(self, mock_exec):
+        mock_exec.return_value = [{"CUSTOMERID": "A"}]
+
+        out = await mod.find_customers("VA", city="Richmond")
+        self.assertEqual(out["count"], 1)
+
+        args, kwargs = mock_exec.call_args
+        sql_sent = args[0].upper()
+        params_sent = kwargs.get("params")
+
+        self.assertIn("CUSTOMERCITY", sql_sent)
+        self.assertEqual(params_sent, ["VA", "Richmond"])
+
+    @patch(f"{MODULE_UNDER_TEST}.execute_query_async")
+    async def test_find_customers_truncates_results(self, mock_exec):
+        mock_exec.return_value = [{"CUSTOMERID": str(i)} for i in range(200)]
+
+        out = await mod.find_customers("VA", max_rows=10)
+        self.assertEqual(out["count"], 10)
+        self.assertTrue(out["truncated"])
+
+class TestFindCustomers(unittest.IsolatedAsyncioTestCase):
+    @patch(f"{MODULE_UNDER_TEST}.execute_query_async")
+    async def test_find_customers_builds_query_and_params_state_only(self, mock_exec):
+        mock_exec.return_value = [{"CUSTOMERID": "A"}]
+
+        out = await mod.find_customers("Virginia")  # should normalize to VA
+        self.assertIn("results", out)
+        self.assertEqual(out["count"], 1)
+
+        args, kwargs = mock_exec.call_args
+        sql_sent = args[0]
+        params_sent = kwargs.get("params")
+
+        self.assertIn("FROM daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM", sql_sent)
+        self.assertIn("CUSTOMERSTATE", sql_sent.upper())
+        self.assertEqual(params_sent, ["VA"])
+
+    @patch(f"{MODULE_UNDER_TEST}.execute_query_async")
+    async def test_find_customers_includes_city_filter_when_provided(self, mock_exec):
+        mock_exec.return_value = [{"CUSTOMERID": "A"}]
+
+        out = await mod.find_customers("VA", city="Richmond")
+        self.assertEqual(out["count"], 1)
+
+        args, kwargs = mock_exec.call_args
+        sql_sent = args[0].upper()
+        params_sent = kwargs.get("params")
+
+        self.assertIn("CUSTOMERCITY", sql_sent)
+        self.assertEqual(params_sent, ["VA", "Richmond"])
+
+    @patch(f"{MODULE_UNDER_TEST}.execute_query_async")
+    async def test_find_customers_truncates_results(self, mock_exec):
+        mock_exec.return_value = [{"CUSTOMERID": str(i)} for i in range(200)]
+
+        out = await mod.find_customers("VA", max_rows=10)
+        self.assertEqual(out["count"], 10)
+        self.assertTrue(out["truncated"])
+
+class TestSqlFingerprint(unittest.TestCase):
+    def test_sql_fingerprint_is_stable_and_short(self):
+        a = mod._sql_fingerprint("SELECT 1")
+        b = mod._sql_fingerprint("SELECT 1")
+        self.assertEqual(a, b)
+        self.assertEqual(len(a), 12)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
