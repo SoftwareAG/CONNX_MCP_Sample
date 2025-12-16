@@ -224,17 +224,17 @@ Below are examples of how MCP-compatible clients (such as Claude Desktop or othe
 
 CONNX Database Server Tools:
 
-query_connx - Query data from CONNX-connected databases using SQL (SELECT-only queries)
-update_connx - Perform update operations (requires CONNX_ALLOW_WRITES=true)
-count_customers - Get total number of customers
-customers_by_state - Get customer distribution by state
-customer_cities - Get customer cities information
-customers_missing_phone - Find customers without phone numbers
-get_customer - Retrieve a specific customer by ID
-find_customers - Search for customers by state and optional city
-describe_entities - Describe known business entities and their data sources
-count_entities - Count rows for business entities (customers, clients, etc.)
----
+* query_connx - Query data from CONNX-connected databases using SQL (SELECT-only queries)
+* update_connx - Perform update operations (requires CONNX_ALLOW_WRITES=true)
+* count_customers - Get total number of customers
+* customers_by_state - Get customer distribution by state
+* customer_cities - Get customer cities information
+* customers_missing_phone - Find customers without phone numbers
+* get_customer - Retrieve a specific customer by ID
+* find_customers - Search for customers by state and optional city
+* describe_entities - Describe known business entities and their data sources
+* count_entities - Count rows for business entities (customers, clients, etc.)
+* ---
 
 ## Testing 
 This project uses pytest for unit testing. Tests mock database interactions to run without a real CONNX setup.

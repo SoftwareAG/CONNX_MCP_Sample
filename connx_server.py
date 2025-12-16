@@ -100,9 +100,11 @@ def _is_select_only(sql: str) -> bool:
 def get_connx_connection():
     """Establish a connection to CONNX via pyodbc."""
     _assert_config()
+
+    timeout = int(os.getenv("CONNX_TIMEOUT", "30"))
     conn_str = f"DSN={CONNX_DSN};UID={CONNX_USER};PWD={CONNX_PASS}"
     try:
-        conn = pyodbc.connect(conn_str)
+        conn = pyodbc.connect(conn_str, timeout=timeout)
         logger.info("Successfully connected to CONNX")
         return conn
     except pyodbc.Error as e:
@@ -122,6 +124,7 @@ def execute_query(query: str, params: Optional[List[Any]] = None) -> List[Dict[s
     fp = _sql_fingerprint(query)
     try:
         cursor = conn.cursor()
+     #   cursor.timeout = int(os.getenv("CONNX_TIMEOUT", "30"))
         cursor.execute(query, params or [])
         if cursor.description is None:
             # A SELECT should provide a description; if not, treat as an error.
