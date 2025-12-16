@@ -26,11 +26,42 @@ An unofficial MCP (Model Context Protocol) server for integrating with CONNX dat
 - Resources: Schema discovery.
 - Async support for efficiency.
 
-## Installation
-1. Clone the repo: `git clone https://github.com/yourusername/connx-mcp-server.git`
-2. Install dependencies: `pip install -r requirements.txt`
-3. Configure CONNX DSN in `connx_server.py` (use env vars for production).
+## Prerequisites
+- Python 3.8 or higher
+- CONNX ODBC driver installed and configured
+- Valid CONNX DSN (Data Source Name) configured in your system
+- Database credentials with appropriate read/write permissions
+- For Windows: Microsoft ODBC Driver for CONNX
+- For Linux: unixODBC with CONNX driver
 
+## Installation
+1. Clone the repo: `git clone https://github.com/djecon-sag/CONNX_MCP_Sample.git`
+2. Install dependencies: `pip install -r requirements.txt`
+3. Configure CONNX DSN (see Configuration section below)
+
+## Configuration
+
+### Environment Variables
+Create a `.env` file in the project root:
+
+```dotenv
+CONNX_DSN=your_connx_dsn_name
+CONNX_USER=your_username
+CONNX_PASSWORD=your_password
+CONNX_TIMEOUT=30
+```
+
+### Connection String Format
+Alternatively, configure in `connx_server.py`:
+```python
+connection_string = (
+    f"DSN={CONNX_DSN};"
+    f"UID={CONNX_USER};"
+    f"PWD={CONNX_PASSWORD};"
+)
+```
+
+**Security Note**: Never commit credentials to version control. Always use environment variables or secure credential management in production.
 
 ## Usage
 Run: `python connx_server.py`
@@ -46,81 +77,68 @@ MCP tools provide a safe, well-defined interface for interacting with CONNX-back
 
 ### `query_connx`
 
-Purpose
+**Purpose**
 Executes a SQL SELECT statement against a CONNX-connected database and returns the results.
 
-Parameters
-	•	query (str): SQL SELECT statement
+**Parameters**
+- `query` (str): SQL SELECT statement
 
-Behavior
-	•	Executes asynchronously
-	•	Uses parameterized execution internally
-	•	Returns results as a list of dictionaries
-	•	Automatically sanitizes input to reduce SQL injection risk
+**Behavior**
+- Executes asynchronously
+- Uses parameterized execution internally
+- Returns results as a list of dictionaries
+- Automatically sanitizes input to reduce SQL injection risk
 
-```python
-@mcp.tool()
-async def query_connx(query: str) -> Dict[str, Any]:
-```
-## Purpose
-Executes a SQL SELECT statement against a CONNX-connected database and returns the results.
-
-## Parameters
-query (str): SQL SELECT statement
-
-## Behavior
--	Executes asynchronously
--	Uses parameterized execution internally
--	Returns results as a list of dictionaries
--	Automatically sanitizes input to reduce SQL injection risk
-
-## Return format
+**Return format**
 ```json
-	{
-	  "results": [
-		{ "COLUMN1": "value", "COLUMN2": 123 },
-		...
-	  ],
-	  "count": 10
-	}
+{
+  "results": [
+    { "COLUMN1": "value", "COLUMN2": 123 },
+    ...
+  ],
+  "count": 10
+}
 ```
 
-## Example
+**Example**
 ```sql
 SELECT CUSTOMER_ID, CUSTOMER_NAME
 FROM CUSTOMERS
 WHERE STATE = 'CA'
 ```
-## update_connx
-```python
-@mcp.tool()
-async def update_connx(operation: str, query: str) -> Dict[str, Any]:
-```
-## Purpose
+
+---
+
+### `update_connx`
+
+**Purpose**
 Executes data-modifying SQL statements (INSERT, UPDATE, DELETE) via CONNX.
 
-## Parameters
-	•	operation (str): One of insert, update, delete
-	•	query (str): Full SQL statement
+**Parameters**
+- `operation` (str): One of insert, update, delete
+- `query` (str): Full SQL statement
 
-## Behavior
-	•	Validates the operation type before execution
-	•	Executes inside a transaction
-	•	Commits on success, rolls back on failure
+**Behavior**
+- Validates the operation type before execution
+- Executes inside a transaction
+- Commits on success, rolls back on failure
 
-## Return format
+**Return format**
 ```json
 {
   "affected_rows": 5,
   "message": "Update completed successfully."
 }
 ```
-## Example
+
+**Example**
 ```sql
 UPDATE CUSTOMERS
 SET STATUS = 'INACTIVE'
 WHERE LAST_LOGIN < '2022-01-01'
 ```
+
+---
 ## MCP Client Examples
 
 Below are examples of how MCP-compatible clients (such as Claude Desktop or other MCP hosts) can invoke the CONNX MCP Server.
@@ -135,7 +153,7 @@ Below are examples of how MCP-compatible clients (such as Claude Desktop or othe
   }
 }
 ```
-## Response
+**Response**
 ```json
 {
   "results": [
@@ -144,55 +162,103 @@ Below are examples of how MCP-compatible clients (such as Claude Desktop or othe
   "count": 1
 }
 ```
----
 
-## Integrate in MCP host config
-```python
-@mcp.tool()
-async def query_connx(query: str) -> Dict[str, Any]:
-```
+### Example: Multi-Source Query
 
-# Testing 
-This project uses pytest for unit testing. Tests mock database interactions to run without a real CONNX setup.
-
-- Install test deps: `pip install pytest pytest-mock pytest-asyncio`
-- Run tests: `pytest tests/`
-- Commandline smoke test `python -c "from dotenv import load_dotenv; load_dotenv(); from connx_server import get_connx_connection; c=get_connx_connection(); print('OK'); c.close()"`
-- Run Python smoke test: ` python .\scripts\smoke.py
-`
-
-Coverage includes connection handling, query/update execution, sanitization, and MCP tools/resources.
-
-## Integrate in MCP host config
 ```json
 {
-  "mcpServers": {
-	"connx-database-server": {
-	  "command": "python",
-	  "args": ["connx_server.py"]
-	}
+  "tool": "query_connx",
+  "arguments": {
+    "query": "SELECT o.ORDER_ID, c.CUSTOMER_NAME, o.TOTAL FROM ORDERS o JOIN CUSTOMERS c ON o.CUSTOMER_ID = c.CUSTOMER_ID WHERE o.ORDER_DATE > '2024-01-01'"
   }
 }
 ```
 
+### Example: Batch Update
+
+```json
+{
+  "tool": "update_connx",
+  "arguments": {
+    "operation": "update",
+    "query": "UPDATE INVENTORY SET STATUS = 'REORDER' WHERE QUANTITY < REORDER_LEVEL"
+  }
+}
+```
+
+---
+
+## Testing 
+This project uses pytest for unit testing. Tests mock database interactions to run without a real CONNX setup.
+
+- Install test deps: `pip install pytest pytest-mock pytest-asyncio`
+- Run tests: `pytest tests/`
+- Commandline smoke test: `python -c "from dotenv import load_dotenv; load_dotenv(); from connx_server import get_connx_connection; c=get_connx_connection(); print('OK'); c.close()"`
+- Run Python smoke test: `python .\scripts\smoke.py`
+
+Coverage includes connection handling, query/update execution, sanitization, and MCP tools/resources.
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**ODBC Connection Failure**
+- Verify CONNX DSN is properly configured: `odbcinst -q -d`
+- Check credentials and network connectivity
+- Ensure CONNX service is running
+
+**Permission Denied**
+- Verify database user has appropriate SELECT/UPDATE/INSERT/DELETE privileges
+- Check firewall rules for database access
+
+**Timeout Errors**
+- Increase connection timeout in environment variables
+- Optimize complex queries
+- Check database performance and indexes
+
+**Module Import Errors**
+- Ensure all dependencies installed: `pip install -r requirements.txt`
+- Verify Python version compatibility (3.8+)
+
+---
+
+## Integrate in MCP Host Config
+
+To integrate this server with an MCP-compatible client (e.g., Claude Desktop), add the following to your MCP host configuration:
+
+```json
+{
+  "mcpServers": {
+    "connx-database-server": {
+      "command": "python",
+      "args": ["connx_server.py"]
+    }
+  }
+}
+```
+
+---
+
 ## Summary
-- query_connx is used for read-only SQL queries
-- update_connx is used for data modification
-- tools are asynchronous, safe, and testable
-- extending the toolset follows a simple, repeatable pattern
+- `query_connx` is used for read-only SQL queries
+- `update_connx` is used for data modification
+- Tools are asynchronous, safe, and testable
+- Extending the toolset follows a simple, repeatable pattern
 - CI and test coverage protect against regressions
 ---
 ## Extending MCP Tools
 
 Adding new tools is intentionally simple and testable.
 
-General Pattern:
+**General Pattern:**
 1. Create a Python function
-2. Decorate it with @mcp.tool()
-3. Call existing helper functions (execute_query_async, execute_update_async)
+2. Decorate it with `@mcp.tool()`
+3. Call existing helper functions (`execute_query_async`, `execute_update_async`)
 4. Return a JSON-serializable dictionary
 
-## Example: Add a count_connx Tool
+**Example: Add a `count_connx` Tool**
 
 ```python
 @mcp.tool()
@@ -211,15 +277,19 @@ async def count_connx(table_name: str) -> Dict[str, Any]:
     except ValueError as e:
         return {"error": str(e)}
 ```
-## Usage
-```python
+
+**Usage**
+```json
 {
-  "table": "CUSTOMERS"
+  "tool": "count_connx",
+  "arguments": {
+    "table_name": "CUSTOMERS"
+  }
 }
 ```
 ---
 ## What is MCP?
-The Model Context Protocol (MCP) is an open-source standard developed by Anthropic and launched in November 2024. It enables AI models and applications to securely connect to and interact with external data sources, tools, and workflows through a standardized interface. 
+The Model Context Protocol (MCP) is an open-source standard developed by Anthropic and launched in November 2024. It enables AI models and applications to securely connect to and interact with external data sources, tools, and workflows through a standardized interface.
 
 MCP acts as a universal "USB-C" port for AI, allowing seamless integrations without the need for custom code for each connection. This protocol builds on existing concepts like tool use and function calling but standardizes them, reducing the fragmentation in AI integrations. By providing access to live, real-world data, MCP empowers large language models (LLMs) like Claude to perform tasks, deliver accurate insights, and handle actions that extend beyond their original training data.
 
@@ -227,6 +297,16 @@ MCP addresses the challenge of AI models being isolated from real-time data and 
 - Access current data from diverse sources.
 - Perform actions on behalf of users, such as querying databases or sending emails.
 - Utilize specialized tools and workflows without custom integrations.
+
+### Why MCP for CONNX?
+
+CONNX already provides unified access to diverse data sources, and MCP adds an AI-powered natural language interface on top. This combination enables:
+
+- **Simplified Legacy Access**: Query mainframe and legacy systems using plain English instead of complex SQL
+- **Democratized Data**: Non-technical users can access enterprise data without SQL knowledge
+- **Reduced Integration Complexity**: One MCP server provides AI access to all CONNX-connected sources
+- **Enterprise Security**: Leverage CONNX's proven security model while adding AI capabilities
+- **Faster Time-to-Insight**: From question to answer in seconds, not hours
 
 
 ---
@@ -257,3 +337,39 @@ Consider a user query: "Find the latest sales report in our database and email i
 5. **Final Response**: The LLM replies to the user: "I have found the latest sales report and emailed it to your manager."
 
 This bidirectional flow ensures efficient, secure interactions. Real-world examples include generating web apps from Figma designs, analyzing data across multiple databases via natural language, or creating 3D models in Blender for printing.
+
+---
+
+## CONNX MCP Use Cases
+
+### Business Intelligence & Analytics
+- **Natural Language Queries**: "Show me top 10 customers by revenue in Q4 2024"
+- **Cross-Database Analysis**: Query data from multiple CONNX-connected sources (mainframe, Oracle, SQL Server) in a single conversation
+- **Trend Analysis**: "Compare sales performance across regions for the last 3 quarters"
+
+### Data Operations
+- **Bulk Updates**: "Update all inactive customers who haven't logged in since 2022"
+- **Data Validation**: "Check for duplicate customer records and show me conflicts"
+- **Data Migration**: "Extract customer data from legacy system and prepare for transformation"
+
+### Enterprise Integrations
+- **Mainframe Access**: Access legacy VSAM, IMS, or DB2 data through natural language
+- **Multi-Platform Queries**: Combine data from AS/400, Oracle, and SQL Server in a single query
+- **Real-Time Reporting**: Generate reports from live enterprise data without manual SQL
+
+### Development & Testing
+- **Schema Exploration**: "What tables contain customer information?"
+- **Data Sampling**: "Show me sample records from the orders table"
+- **Query Optimization**: Test and refine queries with AI assistance
+
+---
+
+## Security Best Practices
+
+- **Input Sanitization**: All queries are sanitized to prevent SQL injection attacks
+- **Parameterized Queries**: Use parameterized execution where possible
+- **Least Privilege**: Grant database users only necessary permissions
+- **Audit Logging**: Enable CONNX audit logs to track all database operations
+- **Credential Management**: Use environment variables or secret management services (AWS Secrets Manager, Azure Key Vault)
+- **Network Security**: Use VPN or private networks for database connections
+- **Rate Limiting**: Consider implementing rate limits for MCP tool invocations

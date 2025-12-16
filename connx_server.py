@@ -153,13 +153,81 @@ async def get_schema_for_table(table_name: str) -> Dict[str, Any]:
     query = (
         "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE "
         "FROM INFORMATION_SCHEMA.COLUMNS "
-        f"WHERE TABLE_NAME = '{sanitize_input(table_name)}'"
+        "WHERE TABLE_NAME = ?"
     )
     try:
-        results = await execute_query_async(query)
+        results = await execute_query_async(query, params=[table_name])
         return {"schemas": results}
     except ValueError as e:
         return {"error": str(e)}
+
+# Optional helper: map full state names to 2-letter codes (extend as needed)
+STATE_NAME_TO_CODE = {
+    "virginia": "VA",
+    "california": "CA",
+    "texas": "TX",
+    "new york": "NY",
+    "florida": "FL",
+    # add more as you want
+}
+
+def _normalize_state(state: str) -> str:
+    s = (state or "").strip()
+    if not s:
+        return s
+    return STATE_NAME_TO_CODE.get(s.lower(), s)
+
+
+@mcp.tool()
+async def find_customers(
+    state: str,
+    city: Optional[str] = None,
+    max_rows: int = 100
+) -> Dict[str, Any]:
+    """
+    Find customers by state and optional city.
+
+    Notes:
+    - VSAM/CONNX string columns are often fixed-width CHAR and right-space padded.
+      Use RTRIM() for consistent comparisons and clean output.
+    - ANSI SQL-92: no LIMIT/TOP; we apply max_rows in Python after fetch.
+    """
+    state_code = _normalize_state(state)
+
+    sql = """
+        SELECT
+            RTRIM(CUSTOMERID)       AS CUSTOMERID,
+            RTRIM(CUSTOMERNAME)     AS CUSTOMERNAME,
+            RTRIM(CUSTOMERADDRESS)  AS CUSTOMERADDRESS,
+            RTRIM(CUSTOMERCITY)     AS CUSTOMERCITY,
+            RTRIM(CUSTOMERSTATE)    AS CUSTOMERSTATE,
+            RTRIM(CUSTOMERZIP)      AS CUSTOMERZIP,
+            RTRIM(CUSTOMERCOUNTRY)  AS CUSTOMERCOUNTRY,
+            RTRIM(CUSTOMERPHONE)    AS CUSTOMERPHONE
+        FROM daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM
+        WHERE UPPER(RTRIM(CUSTOMERSTATE)) = UPPER(?)
+    """
+    params: List[Any] = [state_code]
+
+    if city and city.strip():
+        sql += " AND UPPER(RTRIM(CUSTOMERCITY)) = UPPER(?)"
+        params.append(city.strip())
+
+    sql += " ORDER BY RTRIM(CUSTOMERNAME)"
+
+    try:
+        results = await execute_query_async(sql, params=params)
+
+        # Soft limit in Python (ANSI SQL-92 compatible)
+        truncated = False
+        if max_rows and max_rows > 0 and len(results) > max_rows:
+            results = results[:max_rows]
+            truncated = True
+
+        return {"results": results, "count": len(results), "truncated": truncated}
+    except ValueError as e:
+        return {"error": str(e)}
+
 # Main Entry Point
 if __name__ == "__main__":
     # FastMCP.run() manages its own event loop via anyio.run()
