@@ -27,6 +27,40 @@ logger = logging.getLogger(__name__)
 # MCP Server Initialization
 mcp = FastMCP("connx-database-server")
 
+# -------------------------------
+# Natural-language entity aliases
+# -------------------------------
+
+ENTITY_ALIASES = {
+    "customers": {
+        "aliases": [
+            "customer",
+            "customers",
+            "client",
+            "clients",
+            "accounts",
+            "buyers",
+            "companies"
+        ],
+        "table": "daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM",
+        "description": "VSAM-backed customer master file accessed via CONNX"
+    }
+}
+
+def resolve_entity(name: str) -> Optional[str]:
+    """
+    Resolve a natural-language entity name to a canonical table.
+    """
+    if not name:
+        return None
+
+    n = name.strip().lower()
+
+    for entity in ENTITY_ALIASES.values():
+        if n in entity["aliases"]:
+            return entity["table"]
+
+    return None
 
 def _assert_config() -> None:
     missing = [k for k in ("CONNX_DSN", "CONNX_USER", "CONNX_PASS") if not os.getenv(k)]
@@ -173,6 +207,23 @@ async def update_connx(operation: str, query: str) -> Dict[str, Any]:
     except ValueError as e:
         return {"error": str(e)}
 
+@mcp.tool()
+async def count_customers() -> Dict[str, Any]:
+    """
+    Return the total number of customers.
+    Uses the canonical customers table.
+    """
+    sql = """
+        SELECT COUNT(*) AS TOTAL_CUSTOMERS
+        FROM daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM
+    """
+    try:
+        rows = await execute_query_async(sql)
+        return {
+            "total_customers": rows[0]["TOTAL_CUSTOMERS"]
+        }
+    except ValueError as e:
+        return {"error": str(e)}
 
 # MCP Resources
 @mcp.resource("schema://schema")
@@ -198,17 +249,105 @@ async def get_schema_for_table(table_name: str) -> Dict[str, Any]:
     except ValueError as e:
         return {"error": str(e)}
 
+@mcp.resource("schema://domain/customers")
+async def customers_domain_metadata() -> Dict[str, Any]:
+    """
+    Canonical metadata describing where 'customers' data lives.
+    Used by MCP clients to avoid guessing table names.
+    """
+    return {
+        "entity": "customers",
+        "description": "Customer master data from mainframe VSAM via CONNX",
+        "primary_table": "daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM",
+        "primary_key": "CUSTOMERID",
+        "common_queries": {
+            "count_all": (
+                "SELECT COUNT(*) AS TOTAL_CUSTOMERS "
+                "FROM daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM"
+            ),
+            "by_state": (
+                "SELECT * FROM daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM "
+                "WHERE CUSTOMERSTATE = ?"
+            )
+        },
+        "columns": {
+            "CUSTOMERID": "Customer identifier",
+            "CUSTOMERNAME": "Customer name",
+            "CUSTOMERSTATE": "2-letter US state code",
+            "CUSTOMERCITY": "City",
+            "CUSTOMERZIP": "Postal code"
+        }
+    }
 
+@mcp.resource("domain://datasets")
+async def datasets() -> Dict[str, Any]:
+    return {
+        "datasets": [
+            {
+                "logical_name": "customers",
+                "table": "daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM",
+                "primary_key": "CUSTOMERID",
+                "columns": [
+                    "CUSTOMERID","CUSTOMERNAME","CUSTOMERADDRESS","CUSTOMERCITY",
+                    "CUSTOMERSTATE","CUSTOMERZIP","CUSTOMERCOUNTRY","CUSTOMERPHONE"
+                ],
+                "notes": "VSAM fields are fixed-width CHAR; use RTRIM() for comparisons/output."
+            }
+        ]
+    }
 # Optional helper: map full state names to 2-letter codes (extend as needed)
 STATE_NAME_TO_CODE = {
-    "virginia": "VA",
+    "alabama": "AL",
+    "alaska": "AK",
+    "arizona": "AZ",
+    "arkansas": "AR",
     "california": "CA",
-    "texas": "TX",
-    "new york": "NY",
+    "colorado": "CO",
+    "connecticut": "CT",
+    "delaware": "DE",
     "florida": "FL",
-    # add more as you want
+    "georgia": "GA",
+    "hawaii": "HI",
+    "idaho": "ID",
+    "illinois": "IL",
+    "indiana": "IN",
+    "iowa": "IA",
+    "kansas": "KS",
+    "kentucky": "KY",
+    "louisiana": "LA",
+    "maine": "ME",
+    "maryland": "MD",
+    "massachusetts": "MA",
+    "michigan": "MI",
+    "minnesota": "MN",
+    "mississippi": "MS",
+    "missouri": "MO",
+    "montana": "MT",
+    "nebraska": "NE",
+    "nevada": "NV",
+    "new hampshire": "NH",
+    "new jersey": "NJ",
+    "new mexico": "NM",
+    "new york": "NY",
+    "north carolina": "NC",
+    "north dakota": "ND",
+    "ohio": "OH",
+    "oklahoma": "OK",
+    "oregon": "OR",
+    "pennsylvania": "PA",
+    "rhode island": "RI",
+    "south carolina": "SC",
+    "south dakota": "SD",
+    "tennessee": "TN",
+    "texas": "TX",
+    "utah": "UT",
+    "vermont": "VT",
+    "virginia": "VA",
+    "washington": "WA",
+    "west virginia": "WV",
+    "wisconsin": "WI",
+    "wyoming": "WY"
 }
-
 
 def _normalize_state(state: str) -> str:
     s = (state or "").strip()
@@ -216,6 +355,57 @@ def _normalize_state(state: str) -> str:
         return s
     return STATE_NAME_TO_CODE.get(s.lower(), s)
 
+@mcp.tool()
+async def customers_by_state() -> Dict[str, Any]:
+    sql = """
+        SELECT
+            RTRIM(CUSTOMERSTATE) AS STATE,
+            COUNT(*) AS CUSTOMER_COUNT
+        FROM daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM
+        GROUP BY RTRIM(CUSTOMERSTATE)
+        ORDER BY CUSTOMER_COUNT DESC
+    """
+    rows = await execute_query_async(sql)
+    return {"states": rows}
+
+@mcp.tool()
+async def customer_cities() -> Dict[str, Any]:
+    sql = """
+        SELECT DISTINCT RTRIM(CUSTOMERCITY) AS CITY
+        FROM daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM
+        ORDER BY CITY
+    """
+    rows = await execute_query_async(sql)
+    return {"cities": rows}
+
+@mcp.tool()
+async def customers_missing_phone() -> Dict[str, Any]:
+    sql = """
+        SELECT
+            RTRIM(CUSTOMERID) AS CUSTOMERID,
+            RTRIM(CUSTOMERNAME) AS CUSTOMERNAME
+        FROM daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM
+        WHERE RTRIM(CUSTOMERPHONE) = ''
+    """
+    rows = await execute_query_async(sql)
+    return {"results": rows, "count": len(rows)}
+
+@mcp.tool()
+async def get_customer(customer_id: str) -> Dict[str, Any]:
+    sql = """
+        SELECT
+            RTRIM(CUSTOMERID) AS CUSTOMERID,
+            RTRIM(CUSTOMERNAME) AS CUSTOMERNAME,
+            RTRIM(CUSTOMERADDRESS) AS CUSTOMERADDRESS,
+            RTRIM(CUSTOMERCITY) AS CUSTOMERCITY,
+            RTRIM(CUSTOMERSTATE) AS CUSTOMERSTATE,
+            RTRIM(CUSTOMERZIP) AS CUSTOMERZIP,
+            RTRIM(CUSTOMERPHONE) AS CUSTOMERPHONE
+        FROM daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM
+        WHERE RTRIM(CUSTOMERID) = ?
+    """
+    rows = await execute_query_async(sql, params=[customer_id])
+    return {"customer": rows[0] if rows else None}
 
 @mcp.tool()
 async def find_customers(state: str, city: Optional[str] = None, max_rows: int = 100) -> Dict[str, Any]:
@@ -262,8 +452,81 @@ async def find_customers(state: str, city: Optional[str] = None, max_rows: int =
     except ValueError as e:
         return {"error": str(e)}
 
+@mcp.tool()
+async def describe_entities() -> Dict[str, Any]:
+    """
+    Describe known business entities and their underlying data sources.
+    """
+    entities = []
+    for name, info in ENTITY_ALIASES.items():
+        entities.append({
+            "entity": name,
+            "aliases": info["aliases"],
+            "table": info["table"],
+            "description": info["description"]
+        })
+
+    return {"entities": entities}
+
+@mcp.tool()
+async def count_entities(entity: str) -> Dict[str, Any]:
+    """
+    Count rows for a known business entity (e.g., customers, clients).
+    """
+    table = resolve_entity(entity)
+
+    if not table:
+        return {"error": f"Unknown entity: {entity}"}
+
+    sql = f"SELECT COUNT(*) AS TOTAL_COUNT FROM {table}"
+    rows = await execute_query_async(sql)
+
+    return {
+        "entity": entity,
+        "table": table,
+        "total": rows[0]["TOTAL_COUNT"]
+    }
+
+@mcp.resource("semantic://entities")
+async def get_semantic_entities() -> Dict[str, Any]:
+    return {
+        "entities": [
+            {
+                "entity": "customers",
+                "aliases": [
+                    "customer", "customers", "client", "clients",
+                    "accounts", "buyers", "companies"
+                ],
+                "table": "daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM",
+                "primary_key": "CUSTOMERID",
+                "description": "Customer master records stored in a VSAM file"
+            },
+            {
+                "entity": "orders",
+                "aliases": [
+                    "order", "orders", "purchases", "transactions", "sales"
+                ],
+                "table": "daea_Mainframe_VSAM.dbo.ORDERS_VSAM",
+                "primary_key": "ORDERID",
+                "foreign_keys": {
+                    "CUSTOMERID": "customers.CUSTOMERID",
+                    "PRODUCTID": "products.PRODUCTID"
+                },
+                "description": "Customer order transactions stored in VSAM"
+            },
+            {
+                "entity": "products",
+                "aliases": [
+                    "product", "products", "items", "inventory", "goods"
+                ],
+                "table": "daea_Mainframe_VSAM.dbo.PRODUCTS_VSAM",
+                "primary_key": "PRODUCTID",
+                "description": "Product master file stored in VSAM"
+            }
+        ]
+    }
 
 # Main Entry Point
-if __name__ == "__main__":
+if __name__ == "__main__": # pragma: no cover
     # FastMCP.run() manages its own event loop via anyio.run()
     mcp.run(transport="stdio")

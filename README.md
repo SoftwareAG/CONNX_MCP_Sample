@@ -210,7 +210,15 @@ Below are examples of how MCP-compatible clients (such as Claude Desktop or othe
   }
 }
 ```
-
+---
+## Sample Questions
+      1.	“How many customers do we have in total?”
+      2.	“Which customers live in California?”
+      3.	“Which customers are in San Francisco?”
+      4.	“How many customers do we have in each state?”
+      5.	“Show me details for customer Z3375.”
+      6.	“Do we have any customers missing phone numbers?”
+      7.    "What products are most frequently ordered by customers?"
 ---
 
 ## Testing 

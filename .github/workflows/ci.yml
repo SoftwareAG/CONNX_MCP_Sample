@@ -36,3 +36,10 @@ jobs:
         shell: pwsh
         run: |
           pytest -m "not integration" --cov=connx_server --cov-report=term-missing --cov-fail-under=90
+
+      - name: Show versions
+        shell: pwsh
+        run: |
+          python --version
+          pip --version
+          pytest --version
