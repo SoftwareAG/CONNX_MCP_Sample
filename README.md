@@ -5,11 +5,11 @@
 - [Overview](#connx-mcp-server)
 - [Sample Features](#features)
 - [Installation](#installation)
+- [Testing](#testing-)
 - [Usage](#usage)
 - [MCP Tools](#mcp-tools)
   - [`query_connx`](#query_connx)
   - [`update_connx`](#update_connx)
-- [MCP Resources](#mcp-resources)
 - [MCP Client Examples](#mcp-client-examples)
 - [Extending MCP Tools](#extending-mcp-tools)
 - [Summary](#summary)
@@ -30,6 +30,7 @@ An unofficial MCP (Model Context Protocol) server for integrating with CONNX dat
 1. Clone the repo: `git clone https://github.com/yourusername/connx-mcp-server.git`
 2. Install dependencies: `pip install -r requirements.txt`
 3. Configure CONNX DSN in `connx_server.py` (use env vars for production).
+
 
 ## Usage
 Run: `python connx_server.py`
@@ -151,11 +152,14 @@ Below are examples of how MCP-compatible clients (such as Claude Desktop or othe
 async def query_connx(query: str) -> Dict[str, Any]:
 ```
 
-# Testing
+# Testing 
 This project uses pytest for unit testing. Tests mock database interactions to run without a real CONNX setup.
 
 - Install test deps: `pip install pytest pytest-mock pytest-asyncio`
 - Run tests: `pytest tests/`
+- Commandline smoke test `python -c "from dotenv import load_dotenv; load_dotenv(); from connx_server import get_connx_connection; c=get_connx_connection(); print('OK'); c.close()"`
+- Run Python smoke test: ` python .\scripts\smoke.py
+`
 
 Coverage includes connection handling, query/update execution, sanitization, and MCP tools/resources.
 

@@ -161,10 +161,6 @@ async def get_schema_for_table(table_name: str) -> Dict[str, Any]:
     except ValueError as e:
         return {"error": str(e)}
 # Main Entry Point
-async def main():
-    # Run the server (use 'stdio' for local, 'http' for remote)
-    await mcp.run(transport='stdio')  # Or 'http' with port configuration
-
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    # FastMCP.run() manages its own event loop via anyio.run()
+    mcp.run(transport="stdio")
