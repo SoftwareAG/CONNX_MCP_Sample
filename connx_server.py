@@ -33,19 +33,22 @@ mcp = FastMCP("connx-database-server")
 
 ENTITY_ALIASES = {
     "customers": {
-        "aliases": [
-            "customer",
-            "customers",
-            "client",
-            "clients",
-            "accounts",
-            "buyers",
-            "companies"
-        ],
+        "aliases": ["customer", "customers", "client", "clients", "accounts", "buyers", "companies"],
         "table": "daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM",
         "description": "VSAM-backed customer master file accessed via CONNX"
+    },
+    "orders": {
+        "aliases": ["order", "orders", "purchases", "transactions", "sales"],
+        "table": "daea_Mainframe_VSAM.dbo.ORDERS_VSAM",
+        "description": "Customer order transactions stored in VSAM"
+    },
+    "products": {
+        "aliases": ["product", "products", "items", "inventory", "goods"],
+        "table": "daea_Mainframe_VSAM.dbo.PRODUCTS_VSAM",
+        "description": "Product master file stored in VSAM"
     }
 }
+
 
 def resolve_entity(name: str) -> Optional[str]:
     """
@@ -493,39 +496,35 @@ async def get_semantic_entities() -> Dict[str, Any]:
         "entities": [
             {
                 "entity": "customers",
-                "aliases": [
-                    "customer", "customers", "client", "clients",
-                    "accounts", "buyers", "companies"
-                ],
+                "aliases": ["customer", "customers", "client", "clients", "accounts", "buyers", "companies"],
                 "table": "daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM",
                 "primary_key": "CUSTOMERID",
-                "description": "Customer master records stored in a VSAM file"
+                "description": "Customer master records stored in a VSAM file",
             },
             {
                 "entity": "orders",
-                "aliases": [
-                    "order", "orders", "purchases", "transactions", "sales"
-                ],
+                "aliases": ["order", "orders", "purchases", "transactions", "sales"],
                 "table": "daea_Mainframe_VSAM.dbo.ORDERS_VSAM",
                 "primary_key": "ORDERID",
                 "foreign_keys": {
                     "CUSTOMERID": "customers.CUSTOMERID",
-                    "PRODUCTID": "products.PRODUCTID"
+                    "PRODUCTID": "products.PRODUCTID",
                 },
-                "description": "Customer order transactions stored in VSAM"
+                "relationships": {
+                    "customers": "orders.CUSTOMERID -> customers.CUSTOMERID",
+                    "products": "orders.PRODUCTID -> products.PRODUCTID",
+                },
+                "description": "Customer order transactions stored in VSAM",
             },
             {
                 "entity": "products",
-                "aliases": [
-                    "product", "products", "items", "inventory", "goods"
-                ],
+                "aliases": ["product", "products", "items", "inventory", "goods"],
                 "table": "daea_Mainframe_VSAM.dbo.PRODUCTS_VSAM",
                 "primary_key": "PRODUCTID",
-                "description": "Product master file stored in VSAM"
-            }
+                "description": "Product master file stored in VSAM",
+            },
         ]
     }
-
 # Main Entry Point
 if __name__ == "__main__": # pragma: no cover
     # FastMCP.run() manages its own event loop via anyio.run()
