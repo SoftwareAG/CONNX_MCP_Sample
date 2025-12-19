@@ -1,11 +1,11 @@
-![CI](https://github.com/djecon-sag/CONNX_MCP_Sample/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/SoftwareAG/CONNX_MCP_Sample/actions/workflows/ci.yml/badge.svg)
 
 ## Table of Contents
 
 - [Overview](#connx-mcp-server)
 - [Sample Features](#features)
 - [Installation](#installation)
-- [Testing](#testing-)
+- [Testing](#testing)
 - [Usage](#usage)
 - [MCP Tools](#mcp-tools)
   - [`query_connx`](#query_connx)
@@ -39,7 +39,7 @@ The server is not intended to be a complete or hardened production solution. Ins
 - For Linux: unixODBC with CONNX driver
 
 ## Installation
-1. Clone the repo: `git clone https://github.com/djecon-sag/CONNX_MCP_Sample.git`
+1. Clone the repo: `git clone https://github.com/SoftwareAG/CONNX_MCP_Sample.git`
 2. Install dependencies: `pip install -r requirements.txt`
 3. Configure CONNX DSN (see Configuration section below)
 
@@ -253,9 +253,12 @@ Coverage includes connection handling, query/update execution, sanitization, and
 ### Common Issues
 
 **ODBC Connection Failure**
-- Verify CONNX DSN is properly configured: `odbcinst -q -d`
 - Check credentials and network connectivity
 - Ensure CONNX service is running
+- Verify CONNX DSN is properly configured:
+  - **Windows**: Open the ODBC Data Source Administrator by searching for "ODBC Data Sources" in the Start menu (use the 64-bit version if applicable, or odbcad32.exe for 32-bit). Check if your CONNX DSN is listed under the "User DSN" or "System DSN" tab. Double-click the DSN to test the connection.
+  - **Linux**: Use `odbcinst -q -s` (from unixODBC) to list configured DSNs and confirm yours appears. To list drivers, use `odbcinst -q -d`. Test the connection with `isql -v your_dsn_name your_username your_password`.
+  - **macOS**: If using unixODBC (common setup), follow the Linux instructions above. If using iODBC, use `iodbctest` or check `/Library/ODBC/odbc.ini` (system-wide) or `~/Library/ODBC/odbc.ini` (user-specific) for DSN entries. Test with `iodbctest "DSN=your_dsn_name;UID=your_username;PWD=your_password"`.
 
 **Permission Denied**
 - Verify database user has appropriate SELECT/UPDATE/INSERT/DELETE privileges
