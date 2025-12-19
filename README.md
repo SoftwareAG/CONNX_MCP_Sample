@@ -7,7 +7,7 @@
 - [Installation](#installation)
 - [Testing](#testing)
 - [Usage](#usage)
-- [MCP Tools](#mcp-tools)
+- [Sample MCP Tools](#mcp-tools)
   - [`query_connx`](#query_connx)
   - [`update_connx`](#update_connx)
   - [`find_customers`](#find_customers)
