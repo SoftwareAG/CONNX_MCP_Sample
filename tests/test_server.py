@@ -132,12 +132,13 @@ class TestExecuteQuery(unittest.TestCase):
         fake_conn.cursor.return_value = fake_cursor
 
         fake_cursor.description = [("ID",), ("NAME",)]
-        fake_cursor.fetchall.return_value = [(1, "Alice"), (2, "Bob")]
+        fake_cursor.fetchmany.return_value = [(1, "Alice"), (2, "Bob")]
 
         results = mod.execute_query("SELECT ID, NAME FROM T WHERE ID > ?", params=[0])
 
         self.assertEqual(results, [{"ID": 1, "NAME": "Alice"}, {"ID": 2, "NAME": "Bob"}])
         fake_cursor.execute.assert_called_once_with("SELECT ID, NAME FROM T WHERE ID > ?", [0])
+        fake_cursor.fetchmany.assert_called_once()
         fake_conn.close.assert_called_once()
 
     @patch(f"{MODULE_UNDER_TEST}.get_connx_connection")
@@ -261,6 +262,12 @@ class TestMcpToolsAndResources(unittest.IsolatedAsyncioTestCase):
         out = await mod.update_connx("merge", "UPDATE T SET A=1")
         self.assertIn("error", out)
         self.assertIn("invalid operation", out["error"].lower())
+
+    @patch(f"{MODULE_UNDER_TEST}.CONNX_ALLOW_WRITES", True)
+    async def test_update_connx_requires_sql_keyword_match(self):
+        out = await mod.update_connx("update", "DELETE FROM T")
+        self.assertIn("error", out)
+        self.assertIn("must start with update", out["error"].lower())
 
     @patch(f"{MODULE_UNDER_TEST}.CONNX_ALLOW_WRITES", True)
     async def test_update_connx_rejects_semicolons_when_writes_enabled(self):

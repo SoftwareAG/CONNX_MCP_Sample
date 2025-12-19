@@ -20,6 +20,19 @@ CONNX_PASS = os.getenv("CONNX_PASS")
 # Optional security controls
 CONNX_ALLOW_WRITES = os.getenv("CONNX_ALLOW_WRITES", "false").strip().lower() == "true"
 
+# Result limits
+def _env_int(name: str, default: int, minimum: int = 1) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+        if value < minimum:
+            return default
+        return value
+    except (TypeError, ValueError):
+        return default
+
+
+MAX_RESULT_ROWS = _env_int("CONNX_MAX_ROWS", default=1000, minimum=1)
+
 # Setup logging (log to stderr to avoid interfering with MCP stdout)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -97,6 +110,18 @@ def _is_select_only(sql: str) -> bool:
     return s.startswith("select")
 
 
+def _first_keyword(sql: str) -> str:
+    """Return the first keyword/token of the SQL (lowercased)."""
+    return (sql or "").lstrip().split(" ", 1)[0].lower()
+
+
+def _effective_limit(requested: Optional[int]) -> int:
+    """Clamp requested row limit to the configured maximum."""
+    if requested and requested > 0:
+        return min(requested, MAX_RESULT_ROWS)
+    return MAX_RESULT_ROWS
+
+
 def get_connx_connection():
     """Establish a connection to CONNX via pyodbc."""
     _assert_config()
@@ -112,28 +137,42 @@ def get_connx_connection():
         raise ValueError(f"Failed to connect to CONNX: {str(e)}")
 
 
-async def execute_query_async(query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
+async def execute_query_async(
+    query: str,
+    params: Optional[List[Any]] = None,
+    max_rows: Optional[int] = None
+) -> List[Dict[str, Any]]:
     """Asynchronous execution of SELECT queries via CONNX."""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, execute_query, query, params)
+    return await loop.run_in_executor(None, execute_query, query, params, max_rows)
 
 
-def execute_query(query: str, params: Optional[List[Any]] = None) -> List[Dict[str, Any]]:
+def execute_query(
+    query: str,
+    params: Optional[List[Any]] = None,
+    max_rows: Optional[int] = None
+) -> List[Dict[str, Any]]:
     """Execute SELECT query and return results as list of dicts."""
     conn = get_connx_connection()
     fp = _sql_fingerprint(query)
+    limit = max_rows if max_rows and max_rows > 0 else MAX_RESULT_ROWS
     try:
         cursor = conn.cursor()
-     #   cursor.timeout = int(os.getenv("CONNX_TIMEOUT", "30"))
+        # cursor.timeout = int(os.getenv("CONNX_TIMEOUT", "30"))
         cursor.execute(query, params or [])
         if cursor.description is None:
             # A SELECT should provide a description; if not, treat as an error.
             raise ValueError("Query did not return a result set (cursor.description is None).")
 
         columns = [desc[0] for desc in cursor.description]
-        rows = cursor.fetchall()
+        rows = cursor.fetchmany(limit + 1) if limit else cursor.fetchall()
+        truncated = len(rows) > limit if limit else False
+        if truncated:
+            rows = rows[:limit]
         results = [dict(zip(columns, row)) for row in rows]
         logger.info("Query OK fp=%s rows=%d", fp, len(results))
+        if truncated:
+            logger.info("Query truncated fp=%s limit=%d", fp, limit)
         return results
     except (pyodbc.Error, ValueError) as e:
         logger.error("Query failed fp=%s err=%s", fp, e)
@@ -183,7 +222,7 @@ async def query_connx(query: str) -> Dict[str, Any]:
         return {"error": "Only SELECT statements are allowed for query_connx."}
 
     try:
-        results = await execute_query_async(query)
+        results = await execute_query_async(query, max_rows=MAX_RESULT_ROWS)
         return {"results": results, "count": len(results)}
     except ValueError as e:
         return {"error": str(e)}
@@ -201,8 +240,12 @@ async def update_connx(operation: str, query: str) -> Dict[str, Any]:
     if not CONNX_ALLOW_WRITES:
         return {"error": "Writes are disabled. Set CONNX_ALLOW_WRITES=true to enable update operations."}
 
-    if operation.lower() not in ["insert", "update", "delete"]:
+    op = operation.strip().lower()
+    if op not in ["insert", "update", "delete"]:
         return {"error": "Invalid operation. Must be 'insert', 'update', or 'delete'."}
+
+    if _first_keyword(query) != op:
+        return {"error": f"SQL must start with {op.upper()} for this operation."}
 
     if not _is_single_statement(query):
         return {"error": "Only a single SQL statement is allowed (no semicolons)."}
@@ -236,7 +279,7 @@ async def count_customers() -> Dict[str, Any]:
 async def get_schema() -> Dict[str, Any]:
     query = "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS"
     try:
-        results = await execute_query_async(query)
+        results = await execute_query_async(query, max_rows=MAX_RESULT_ROWS)
         return {"schemas": results}
     except ValueError as e:
         return {"error": str(e)}
@@ -250,7 +293,7 @@ async def get_schema_for_table(table_name: str) -> Dict[str, Any]:
         "WHERE TABLE_NAME = ?"
     )
     try:
-        results = await execute_query_async(query, params=[table_name])
+        results = await execute_query_async(query, params=[table_name], max_rows=MAX_RESULT_ROWS)
         return {"schemas": results}
     except ValueError as e:
         return {"error": str(e)}
@@ -447,12 +490,13 @@ async def find_customers(state: str, city: Optional[str] = None, max_rows: int =
     sql += " ORDER BY RTRIM(CUSTOMERNAME)"
 
     try:
-        results = await execute_query_async(sql, params=params)
+        limit = _effective_limit(max_rows)
+        fetch_limit = min(limit + 1, MAX_RESULT_ROWS + 1)
+        results = await execute_query_async(sql, params=params, max_rows=fetch_limit)
 
-        truncated = False
-        if max_rows and max_rows > 0 and len(results) > max_rows:
-            results = results[:max_rows]
-            truncated = True
+        truncated = len(results) > limit
+        if truncated:
+            results = results[:limit]
 
         return {"results": results, "count": len(results), "truncated": truncated}
     except ValueError as e:
@@ -528,6 +572,57 @@ async def get_semantic_entities() -> Dict[str, Any]:
             },
         ]
     }
+
+@mcp.tool()
+async def customer_orders_for_product(
+    customer_id: str,
+    product_name: str,
+    max_rows: int = 50
+) -> Dict[str, Any]:
+    """
+    Get detailed order information for a specific customer and product.
+
+    Args:
+        customer_id: Customer identifier
+        product_name: Name of the product
+        max_rows: Maximum number of orders to return (default: 50)
+
+    Returns order details including dates, quantities, etc.
+    """
+    sql = """
+        SELECT
+            o.ORDERID,
+            o.ORDERDATE,
+            o.PRODUCTQUANTITY,
+            RTRIM(p.PRODUCTNAME) AS PRODUCTNAME,
+            RTRIM(c.CUSTOMERNAME) AS CUSTOMERNAME
+        FROM daea_Mainframe_VSAM.dbo.ORDERS_VSAM o
+        INNER JOIN daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM c 
+            ON RTRIM(c.CUSTOMERID) = RTRIM(o.CUSTOMERID)
+        INNER JOIN daea_Mainframe_VSAM.dbo.PRODUCTS_VSAM p 
+            ON o.PRODUCTID = p.PRODUCTID
+        WHERE RTRIM(c.CUSTOMERID) = ?
+          AND UPPER(RTRIM(p.PRODUCTNAME)) = UPPER(?)
+        ORDER BY o.ORDERDATE DESC
+    """
+
+    try:
+        limit = _effective_limit(max_rows)
+        results = await execute_query_async(
+            sql, 
+            params=[customer_id.strip(), product_name.strip()], 
+            max_rows=limit
+        )
+
+        return {
+            "customer_id": customer_id,
+            "product_name": product_name,
+            "orders": results,
+            "count": len(results)
+        }
+    except ValueError as e:
+        return {"error": str(e)}
+
 # Main Entry Point
 if __name__ == "__main__": # pragma: no cover
     # FastMCP.run() manages its own event loop via anyio.run()
