@@ -1,4 +1,5 @@
 ![CI](https://github.com/SoftwareAG/CONNX_MCP_Sample/actions/workflows/ci.yml/badge.svg)
+![Python Version](https://img.shields.io/badge/Python-3.11%2C%203.12-blue)   
 
 ## Table of Contents
 
@@ -302,6 +303,8 @@ CONNX Database Server Tools:
 - find_customers - Search for customers by state and optional city
 - describe_entities - Describe known business entities and their data sources
 - count_entities - Count rows for business entities (customers, clients, etc.)
+- customer_orders_for_product -  Get detailed order information for a specific customer and product.
+
 
 ---
 
