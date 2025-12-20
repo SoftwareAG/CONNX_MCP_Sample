@@ -1,5 +1,5 @@
 ![CI](https://github.com/SoftwareAG/CONNX_MCP_Sample/actions/workflows/ci.yml/badge.svg)
-![Python Version](https://img.shields.io/badge/Python-3.11%2C%203.12-blue)   
+![Python Version](https://img.shields.io/badge/Python-3.11%2C%203.12-blue)
 
 ## Table of Contents
 
@@ -19,31 +19,32 @@
 
 ## CONNX MCP Server
 
-This project is a demonstration and reference implementation intended to show how an MCP server can be structured, configured, and hosted locally to enable AI-assisted access to CONNX data.
+This project is a demonstration and reference implementation intended to show how an MCP server can be structured, configured, and hosted locally to enable AI-assisted access to Mainframe VSAM data via Software AG CONNX.
 
 The server is not intended to be a complete or hardened production solution. Instead, it provides a focused, minimal example of MCP concepts, including tool definitions, resource exposure, ANSI SQL-92 query patterns, and safe interaction with legacy data sources.
 
 ## Features
 
 - ODBC connection to CONNX for unified database access.
-- MCP tools: `query_connx`, `update_connx`.
+- MCP tools: For example `query_connx`, `update_connx`.
 - Resources: Schema discovery.
 - Async support for efficiency.
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.8 or higher (tested with Python 3.11/3.12)
 - CONNX ODBC driver installed and configured
+  - For Windows: CONNX ODBC Driver.
+  - For Linux: unixODBC with CONNX driver
 - Valid CONNX DSN (Data Source Name) configured in your system
 - Database credentials with appropriate read/write permissions
-- For Windows: Microsoft ODBC Driver for CONNX
-- For Linux: unixODBC with CONNX driver
 
 ## Installation
 
 1. Clone the repo: `git clone https://github.com/SoftwareAG/CONNX_MCP_Sample.git`
 2. Install dependencies: `pip install -r requirements.txt`
 3. Configure CONNX DSN (see Configuration section below)
+4. Configure Claude Desktop MCP connection
 
 ## Configuration
 
@@ -76,7 +77,7 @@ connection_string = (
 
 This server is designed to be launched by an MCP host (e.g., Claude Desktop) using stdio transport.
 
-You typically do not run it manually except for smoke testing.
+You typically do not run the Python code manually except for smoke testing.
 
 ---
 
@@ -86,7 +87,7 @@ This server exposes functionality through **MCP tools**, allowing clients to exe
 
 MCP tools provide a safe, well-defined interface for interacting with CONNX-backed data without exposing raw database connections to clients.
 
-## Currently Available Tools
+## Sample of Currently Available Tools
 
 ### `query_connx`
 
@@ -240,7 +241,7 @@ The CONNX MCP demo uses 3 Mainframe VSAM datasets. COBOL copybooks were used to 
 
 ### Customers
 
-```cobol
+```text
 
 01  CUSTOMERS-VSAM.                      
     05  CUSTOMERID           PIC X(5).   
@@ -255,7 +256,7 @@ The CONNX MCP demo uses 3 Mainframe VSAM datasets. COBOL copybooks were used to 
 
 ### Orders
 
-```cobol
+```text
 
 01  ORDERS-VSAM.                      
     05  ORDERID             PIC 9(4). 
@@ -267,44 +268,82 @@ The CONNX MCP demo uses 3 Mainframe VSAM datasets. COBOL copybooks were used to 
 
 ### Products
 
-```cobol
+```text
 
 01  PRODUCTS-VSAM.                         
-    05  PRODUCTID                PIC 9(4). 
-    05  PRODUCTNAME              PIC X(40).
-    05  PRODUCTPRICE             PIC 9(4). 
-    05  PRODUCTKEYWORDS          PIC X(48).
-    05  PRODUCTGROUPID           PIC 9(4). 
+    05  PRODUCTID           PIC 9(4). 
+    05  PRODUCTNAME         PIC X(40).
+    05  PRODUCTPRICE        PIC 9(4). 
+    05  PRODUCTKEYWORDS     PIC X(48).
+    05  PRODUCTGROUPID      PIC 9(4). 
 ```
 
 ---
 
 ## Sample Questions
 
-      1. “How many customers do we have in total?”
-      2. “Which customers live in California?”
-      3. “Which customers are in San Francisco?”
-      4. “How many customers do we have in each state?”
-      5. “Show me details for customer Z3375.”
-      6. “Do we have any customers missing phone numbers?”
-      7. "What products are most frequently ordered by customers?"
-        
-### What MCP tools are available?
+- How many customers do we have in total?
+- Which customers live in California?
+- Which customers are in San Francisco?
+- How many customers do we have in each state?
+- Show me details for customer Z3375.
+- Do we have any customers missing phone numbers?
+- What products are most frequently ordered by customers?
 
-CONNX Database Server Tools:
+---
 
-- query_connx - Query data from CONNX-connected databases using SQL (SELECT-only queries)
-- update_connx - Perform update operations (requires CONNX_ALLOW_WRITES=true)
-- count_customers - Get total number of customers
-- customers_by_state - Get customer distribution by state
-- customer_cities - Get customer cities information
-- customers_missing_phone - Find customers without phone numbers
-- get_customer - Retrieve a specific customer by ID
-- find_customers - Search for customers by state and optional city
-- describe_entities - Describe known business entities and their data sources
-- count_entities - Count rows for business entities (customers, clients, etc.)
-- customer_orders_for_product -  Get detailed order information for a specific customer and product.
+### What MCP tools are available for the CONNX?
 
+CONNX Demo Database Server Tools:
+
+Core Query Tools
+
+- **query_connx** - Execute SELECT queries (read-only, single statement)
+- **update_connx** - Execute INSERT/UPDATE/DELETE operations (requires `CONNX_ALLOW_WRITES=true`)
+
+Customer-Specific Tools
+
+- **count_customers** - Return total number of customers
+- **customers_by_state** - Get customer counts grouped by state
+- **customer_cities** - Get distinct list of customer cities
+- **customers_missing_phone** - Find customers without phone numbers
+- **get_customer** - Get full customer details by customer ID
+- **find_customers** - Find customers by state and optional city (with max_rows limit)
+- **customers_by_product** - Find customers who ordered a specific product (with optional order count)
+
+Entity/Metadata Tools
+
+- **describe_entities** - Describe known business entities (customers, orders, products) and their table mappings
+- **count_entities** - Count rows for any known business entity using natural language names
+
+Resources (not tools, but available via MCP resources)
+
+- **schema://schema** - Get all table/column schema information
+- **schema://schema/{table_name}** - Get schema for a specific table
+- **schema://domain/customers** - Canonical metadata about customers domain
+- **domain://datasets** - Information about available datasets
+- **semantic://entities** - Semantic entity information with relationships
+
+---
+
+## Tool Summary by Use Case
+
+**For exploring data:**
+- `describe_entities` - Start here to see what's available
+- `query_connx` - Flexible SQL queries
+
+**For customer operations:**
+- `get_customer` - Single customer lookup
+- `find_customers` - Search by location
+- `customers_by_product` - Product-based customer search
+- `count_customers` - Quick count
+
+**For analytics:**
+- `customers_by_state` - Geographic distribution
+- `customers_missing_phone` - Data quality checks
+- `count_entities` - Entity counts with natural language
+
+The tools follow a pattern of providing both low-level SQL access (`query_connx`) and high-level purpose-built tools for common operations.
 
 ---
 
