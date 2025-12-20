@@ -37,7 +37,7 @@ The server is not intended to be a complete or hardened production solution. Ins
   - For Windows: CONNX ODBC Driver.
   - For Linux: unixODBC with CONNX driver
 - Valid CONNX DSN (Data Source Name) configured in your system
-- Database credentials with appropriate read/write permissions
+- Database and CONNX credentials with appropriate read/write permissions
 
 ## Installation
 
@@ -75,7 +75,7 @@ connection_string = (
 
 ## Usage
 
-This server is designed to be launched by an MCP host (e.g., Claude Desktop) using stdio transport.
+This server is designed to be launched by an MCP host (e.g., Claude Desktop) using stdio transport. See  [Integrate in MCP Host Config](#integrate-in-mcp-host-config)
 
 You typically do not run the Python code manually except for smoke testing.
 
@@ -329,16 +329,19 @@ Resources (not tools, but available via MCP resources)
 ## Tool Summary by Use Case
 
 **For exploring data:**
+
 - `describe_entities` - Start here to see what's available
 - `query_connx` - Flexible SQL queries
 
 **For customer operations:**
+
 - `get_customer` - Single customer lookup
 - `find_customers` - Search by location
 - `customers_by_product` - Product-based customer search
 - `count_customers` - Quick count
 
 **For analytics:**
+
 - `customers_by_state` - Geographic distribution
 - `customers_missing_phone` - Data quality checks
 - `count_entities` - Entity counts with natural language
@@ -357,6 +360,29 @@ This project uses pytest for unit testing. Tests mock database interactions to r
 - Run Python smoke test: `python .\scripts\smoke.py`
 
 Coverage includes connection handling, query/update execution, sanitization, and MCP tools/resources.
+
+# Optional: Install the MCP inspector
+
+The MCP Inspector is a tool for testing and debugging MCP servers.
+
+```bash
+# Install npx inspector
+npx @modelcontextprotocol/inspector
+
+# Run it against your server
+npx @modelcontextprotocol/inspector python /path/to/your/connx_server.py
+
+Example:  npx @modelcontextprotocol/inspector python C:\\PythonProjects\\CONNX_MCP_Sample\\connx_server.py
+```
+
+This opens a web UI where you can:
+
+- See all available tools
+- Test tools with different parameters
+- View responses
+- Debug issues
+
+![img.png](images/mcp_inspector.png)
 
 ---
 
