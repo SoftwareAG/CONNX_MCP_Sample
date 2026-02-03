@@ -23,7 +23,7 @@ This project is a demonstration and reference implementation intended to show ho
 
 The server is not intended to be a complete or hardened production solution. Instead, it provides a focused, minimal example of MCP concepts, including tool definitions, resource exposure, ANSI SQL-92 query patterns, and safe interaction with legacy data sources.
 
-Contact Demos Economacos (demos.economacos@softwareag.com) for any questions or suggestions.
+Contact Demos Economacos (demos.economacos (at) softwareag.com) for any questions or suggestions.
 
 ## Features
 
