@@ -75,6 +75,23 @@ connection_string = (
 
 **Security Note**: Never commit credentials to version control. Always use environment variables or secure credential management in production.
 
+### Sample CDD File
+
+This project includes a sample CONNX Data Dictionary (CDD) file: **`mcp_vsam_sample.cdd`**
+
+The sample CDD is pre-configured to connect to the **DAEA mainframe VSAM files**. It demonstrates:
+- How to define metadata for mainframe-based VSAM datasets
+- Connection parameters for accessing legacy data sources through CONNX
+- Table and field definitions for VSAM file structures
+
+**Using the Sample CDD:**
+1. The sample CDD serves as a reference for configuring your own CONNX connections
+2. Update the DSN and connection details in `mcp_vsam_sample.cdd` to point to your target mainframe system
+3. Import the CDD into your CONNX configuration to enable database access through the MCP server
+4. Refer to CONNX documentation for detailed information on creating and customizing CDD files
+
+This approach allows you to leverage existing CONNX infrastructure to expose mainframe VSAM data through the MCP interface without manual SQL schema definitions.
+
 ## Usage
 
 This server is designed to be launched by an MCP host (e.g., Claude Desktop) using stdio transport. See  [Integrate in MCP Host Config](#integrate-in-mcp-host-config)
