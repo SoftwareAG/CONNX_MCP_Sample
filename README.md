@@ -34,7 +34,7 @@ Contact Demos Economacos (demos.economacos (at) softwareag.com) for any question
 
 ## Prerequisites
 
-- Python 3.8 or higher (tested with Python 3.11/3.12)
+- Python 3.11 or 3.12
 - CONNX ODBC driver installed and configured
   - For Windows: CONNX ODBC Driver.
   - For Linux: unixODBC with CONNX driver
@@ -43,33 +43,78 @@ Contact Demos Economacos (demos.economacos (at) softwareag.com) for any question
 
 ## Installation
 
-1. Clone the repo: `git clone https://github.com/SoftwareAG/CONNX_MCP_Sample.git`
-2. Install dependencies: `pip install -r requirements.txt`
-3. Configure CONNX DSN (see Configuration section below)
-4. Configure Claude Desktop MCP connection
+If you are new to Python, the safest approach is to create a virtual environment in the project folder and use that Python for everything in this README.
+
+1. Clone the repo and move into it:
+   - `git clone https://github.com/SoftwareAG/CONNX_MCP_Sample.git`
+   - `cd CONNX_MCP_Sample`
+2. Create a virtual environment:
+   - Windows: `py -3.12 -m venv .venv`
+   - macOS/Linux: `python3.12 -m venv .venv`
+3. Activate the virtual environment:
+   - Windows PowerShell: `.\.venv\Scripts\Activate.ps1`
+   - Windows Command Prompt: `.\.venv\Scripts\activate.bat`
+   - macOS/Linux: `source .venv/bin/activate`
+4. Upgrade `pip` and install dependencies:
+   - `python -m pip install --upgrade pip`
+   - `pip install -r requirements.txt`
+5. Create your local config file:
+   - Windows: `Copy-Item .env.example .env`
+   - macOS/Linux: `cp .env.example .env`
+6. Edit `.env` and set your CONNX values (see Configuration below).
+7. Run the smoke test to confirm Python and CONNX can connect before configuring Claude Desktop.
+8. Configure Claude Desktop MCP connection.
+
+If you already have Python 3.11 installed, you can use that instead of 3.12 in the commands above.
+
+## Visual Studio Code
+
+If you are using Visual Studio Code, these steps usually make the setup smoother:
+
+1. Open the project folder in VS Code:
+   - `File -> Open Folder...`
+   - Select `CONNX_MCP_Sample`
+2. Install the Microsoft Python extension if VS Code prompts you.
+3. Select the interpreter from this project’s virtual environment:
+   - Open the Command Palette with `Ctrl+Shift+P`
+   - Run `Python: Select Interpreter`
+   - Choose `.venv\Scripts\python.exe` on Windows or `.venv/bin/python` on macOS/Linux
+4. Open a new terminal in VS Code:
+   - `Terminal -> New Terminal`
+   - If the virtual environment is not already active, activate it with the same command shown in the Installation section
+5. Run a quick smoke test from the VS Code terminal:
+   - Windows: `python .\scripts\smoke.py`
+   - macOS/Linux: `python ./scripts/smoke.py`
+
+Helpful tips:
+
+- If VS Code shows import errors even after dependencies are installed, the wrong interpreter is usually selected.
+- If the integrated terminal uses a different Python than the editor, re-run `Python: Select Interpreter` and then open a fresh terminal window.
+- You can edit `.env` directly in VS Code; just be careful not to commit real credentials.
 
 ## Configuration
 
 ### Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root. The easiest way is to copy `.env.example` and then fill in your real values:
 
 ```dotenv
 CONNX_DSN=your_connx_dsn_name
 CONNX_USER=your_username
-CONNX_PASSWORD=your_password
+CONNX_PASS=your_password
 CONNX_TIMEOUT=30
+CONNX_MAX_ROWS=1000
 ```
 
 ### Connection String Format
 
-Alternatively, configure in `connx_server.py`:
+Most users do not need to edit `connx_server.py`. The server reads the environment variables above and builds the connection string internally like this:
 
 ```python
 connection_string = (
     f"DSN={CONNX_DSN};"
     f"UID={CONNX_USER};"
-    f"PWD={CONNX_PASSWORD};"
+    f"PWD={CONNX_PASS};"
 )
 ```
 
@@ -373,16 +418,19 @@ The tools follow a pattern of providing both low-level SQL access (`query_connx`
 
 This project uses pytest for unit testing. Tests mock database interactions to run without a real CONNX setup.
 
-- Install test deps: `pip install pytest pytest-mock pytest-asyncio`
+- Make sure your virtual environment is activated first.
+- Install test deps: `pip install -r requirements-dev.txt`
 - Run tests: `pytest tests/`
-- Commandline smoke test: `python -c "from dotenv import load_dotenv; load_dotenv(); from connx_server import get_connx_connection; c=get_connx_connection(); print('OK'); c.close()"`
-- Run Python smoke test: `python .\scripts\smoke.py`
+- Command line smoke test: `python -c "from dotenv import load_dotenv; load_dotenv(); from connx_server import get_connx_connection; c=get_connx_connection(); print('OK'); c.close()"`
+- Run Python smoke test:
+  - Windows: `python .\scripts\smoke.py`
+  - macOS/Linux: `python ./scripts/smoke.py`
 
 Coverage includes connection handling, query/update execution, sanitization, and MCP tools/resources.
 
 # Optional: Install the MCP inspector
 
-The MCP Inspector is a tool for testing and debugging MCP servers.
+The MCP Inspector is a tool for testing and debugging MCP servers. It requires Node.js because it is launched with `npx`.
 
 ```bash
 # Install npx inspector
@@ -468,20 +516,22 @@ Full path example: `C:\Users\YourUsername\AppData\Roaming\Claude\claude_desktop_
 
 #### 2. Edit the Configuration File
 
-Open `claude_desktop_config.json` in a text editor and add the CONNX MCP server configuration:
+Open `claude_desktop_config.json` in a text editor and add the CONNX MCP server configuration.
+
+For teammates with limited Python experience, the most reliable option is to point Claude Desktop to the Python inside this repo's virtual environment instead of a system-wide `python` command.
 
 ```json
 {
   "mcpServers": {
     "connx-database-server": {
-      "command": "python",
+      "command": "C:\\path\\to\\CONNX_MCP_Sample\\.venv\\Scripts\\python.exe",
       "args": [
-        "C:\\path\\to\\connx_server.py"
+        "C:\\path\\to\\CONNX_MCP_Sample\\connx_server.py"
       ],
       "env": {
         "CONNX_DSN": "your_dsn_name",
         "CONNX_USER": "your_username",
-        "CONNX_PASSWORD": "your_password"
+        "CONNX_PASS": "your_password"
       }
     }
   }
@@ -491,6 +541,7 @@ Open `claude_desktop_config.json` in a text editor and add the CONNX MCP server 
 **Important Notes:**
 
 - Use absolute paths for the Python script
+- Prefer the virtual-environment Python shown above; it avoids "module not found" issues when multiple Python versions are installed
 - On Windows, use double backslashes (`\\`) in paths or forward slashes (`/`)
 - Environment variables can be set directly in the config or loaded from a `.env` file
 - If you already have other MCP servers configured, add the `connx-database-server` entry to the existing `mcpServers` object
@@ -503,12 +554,12 @@ If you have multiple MCP servers:
 {
   "mcpServers": {
     "connx-database-server": {
-      "command": "python",
+      "command": "C:\\projects\\connx-mcp-server\\.venv\\Scripts\\python.exe",
       "args": ["C:\\projects\\connx-mcp-server\\connx_server.py"],
       "env": {
         "CONNX_DSN": "PROD_DB",
         "CONNX_USER": "app_user",
-        "CONNX_PASSWORD": "secure_password"
+        "CONNX_PASS": "secure_password"
       }
     },
     "filesystem": {
@@ -532,7 +583,9 @@ If you're using a virtual environment for your Python dependencies:
       "command": "C:\\path\\to\\venv\\Scripts\\python.exe",
       "args": ["C:\\path\\to\\connx_server.py"],
       "env": {
-        "CONNX_DSN": "your_dsn_name"
+        "CONNX_DSN": "your_dsn_name",
+        "CONNX_USER": "your_username",
+        "CONNX_PASS": "your_password"
       }
     }
   }
@@ -548,7 +601,9 @@ If you're using a virtual environment for your Python dependencies:
       "command": "/path/to/venv/bin/python",
       "args": ["/path/to/connx_server.py"],
       "env": {
-        "CONNX_DSN": "your_dsn_name"
+        "CONNX_DSN": "your_dsn_name",
+        "CONNX_USER": "your_username",
+        "CONNX_PASS": "your_password"
       }
     }
   }
