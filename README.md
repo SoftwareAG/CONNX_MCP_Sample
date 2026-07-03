@@ -533,6 +533,8 @@ Open `claude_desktop_config.json` in a text editor and add the CONNX MCP server 
 
 For teammates with limited Python experience, the most reliable option is to point Claude Desktop to the Python inside this repo's virtual environment instead of a system-wide `python` command.
 
+VSAM example:
+
 ```json
 {
   "mcpServers": {
@@ -543,6 +545,26 @@ For teammates with limited Python experience, the most reliable option is to poi
       ],
       "env": {
         "CONNX_DSN": "your_dsn_name",
+        "CONNX_USER": "your_username",
+        "CONNX_PASS": "your_password"
+      }
+    }
+  }
+}
+```
+
+Adabas example:
+
+```json
+{
+  "mcpServers": {
+    "connx-adabas-server": {
+      "command": "C:\\path\\to\\CONNX_MCP_Sample\\.venv\\Scripts\\python.exe",
+      "args": [
+        "C:\\path\\to\\CONNX_MCP_Sample\\connx_server_adabas.py"
+      ],
+      "env": {
+        "CONNX_DSN_ADABAS": "your_adabas_dsn_name",
         "CONNX_USER": "your_username",
         "CONNX_PASS": "your_password"
       }
@@ -571,6 +593,15 @@ If you have multiple MCP servers:
       "args": ["C:\\projects\\connx-mcp-server\\connx_server.py"],
       "env": {
         "CONNX_DSN": "PROD_DB",
+        "CONNX_USER": "app_user",
+        "CONNX_PASS": "secure_password"
+      }
+    },
+    "connx-adabas-server": {
+      "command": "C:\\projects\\connx-mcp-server\\.venv\\Scripts\\python.exe",
+      "args": ["C:\\projects\\connx-mcp-server\\connx_server_adabas.py"],
+      "env": {
+        "CONNX_DSN_ADABAS": "DEMO_ADABAS",
         "CONNX_USER": "app_user",
         "CONNX_PASS": "secure_password"
       }
@@ -605,6 +636,24 @@ If you're using a virtual environment for your Python dependencies:
 }
 ```
 
+Adabas on Windows:
+
+```json
+{
+  "mcpServers": {
+    "connx-adabas-server": {
+      "command": "C:\\path\\to\\venv\\Scripts\\python.exe",
+      "args": ["C:\\path\\to\\connx_server_adabas.py"],
+      "env": {
+        "CONNX_DSN_ADABAS": "your_adabas_dsn_name",
+        "CONNX_USER": "your_username",
+        "CONNX_PASS": "your_password"
+      }
+    }
+  }
+}
+```
+
 **macOS/Linux:**
 
 ```json
@@ -615,6 +664,24 @@ If you're using a virtual environment for your Python dependencies:
       "args": ["/path/to/connx_server.py"],
       "env": {
         "CONNX_DSN": "your_dsn_name",
+        "CONNX_USER": "your_username",
+        "CONNX_PASS": "your_password"
+      }
+    }
+  }
+}
+```
+
+Adabas on macOS/Linux:
+
+```json
+{
+  "mcpServers": {
+    "connx-adabas-server": {
+      "command": "/path/to/venv/bin/python",
+      "args": ["/path/to/connx_server_adabas.py"],
+      "env": {
+        "CONNX_DSN_ADABAS": "your_adabas_dsn_name",
         "CONNX_USER": "your_username",
         "CONNX_PASS": "your_password"
       }
