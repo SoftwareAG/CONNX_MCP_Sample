@@ -123,22 +123,27 @@ connection_string = (
 
 **Security Note**: Never commit credentials to version control. Always use environment variables or secure credential management in production.
 
-### Sample CDD File
+### Sample CDD Files
 
-This project includes a sample CONNX Data Dictionary (CDD) file: **`mcp_vsam_sample.cdd`**
+This project includes sample CONNX Data Dictionary (CDD) files for both demo backends:
 
-The sample CDD is pre-configured to connect to the **DAEA mainframe VSAM files**. It demonstrates:
+- **`mcp_vsam_sample.cdd`**: sample CDD for the VSAM-focused server in `connx_server.py`
+- **`mcp_adabas_sample.cdd`**: sample CDD for the Adabas-focused server in `connx_server_adabas.py`
+
+The VSAM sample CDD is pre-configured to connect to the **DAEA mainframe VSAM files**. It demonstrates:
 - How to define metadata for mainframe-based VSAM datasets
 - Connection parameters for accessing legacy data sources through CONNX
 - Table and field definitions for VSAM file structures
 
-**Using the Sample CDD:**
-1. The sample CDD serves as a reference for configuring your own CONNX connections
-2. Update the DSN and connection details in `mcp_vsam_sample.cdd` to point to your target mainframe system
+The Adabas sample CDD is intended to support the Adabas demo functions built around the `EMPLOYEES` and `VEHICLES` tables. It serves as the sample CONNX metadata/configuration starting point for the Adabas-focused MCP server.
+
+**Using the Sample CDDs:**
+1. Choose the sample CDD that matches the demo server you want to run
+2. Update the DSN and connection details in the CDD file to point to your target system
 3. Import the CDD into your CONNX configuration to enable database access through the MCP server
 4. Refer to CONNX documentation for detailed information on creating and customizing CDD files
 
-This approach allows you to leverage existing CONNX infrastructure to expose mainframe VSAM data through the MCP interface without manual SQL schema definitions.
+This approach allows you to leverage existing CONNX infrastructure to expose VSAM or Adabas data through the MCP interface without manual SQL schema definitions.
 
 **Important CDD Safety Guidance**: Configure the CONNX CDD and related database access so the exposed objects are `SELECT`-only. Even though this sample MCP server is read-only, the safest setup is to enforce read-only behavior in CONNX and with database permissions as well, so accidental inserts, updates, or deletes are blocked below the MCP layer.
 
