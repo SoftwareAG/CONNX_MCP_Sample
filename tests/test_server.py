@@ -172,39 +172,6 @@ class TestExecuteQuery(unittest.TestCase):
         fake_conn.close.assert_called_once()
 
 
-class TestExecuteUpdate(unittest.TestCase):
-    @patch(f"{MODULE_UNDER_TEST}.get_connx_connection")
-    def test_execute_update_success_commits_and_returns_rowcount(self, mock_get_conn):
-        fake_conn = MagicMock()
-        fake_cursor = MagicMock()
-        mock_get_conn.return_value = fake_conn
-        fake_conn.cursor.return_value = fake_cursor
-        fake_cursor.rowcount = 3
-
-        affected = mod.execute_update("UPDATE T SET A = 1")
-
-        self.assertEqual(affected, 3)
-        fake_conn.commit.assert_called_once()
-        fake_conn.rollback.assert_not_called()
-        fake_conn.close.assert_called_once()
-
-    @patch(f"{MODULE_UNDER_TEST}.get_connx_connection")
-    def test_execute_update_failure_rolls_back_and_raises(self, mock_get_conn):
-        fake_conn = MagicMock()
-        fake_cursor = MagicMock()
-        mock_get_conn.return_value = fake_conn
-        fake_conn.cursor.return_value = fake_cursor
-        fake_cursor.execute.side_effect = pyodbc.Error("boom")
-
-        with self.assertRaises(ValueError) as ctx:
-            mod.execute_update("DELETE FROM T")
-
-        self.assertIn("update execution failed", str(ctx.exception).lower())
-        fake_conn.rollback.assert_called_once()
-        fake_conn.commit.assert_not_called()
-        fake_conn.close.assert_called_once()
-
-
 class TestAsyncWrappers(unittest.IsolatedAsyncioTestCase):
     @patch(f"{MODULE_UNDER_TEST}.execute_query")
     async def test_execute_query_async_delegates(self, mock_execute_query):
@@ -212,13 +179,6 @@ class TestAsyncWrappers(unittest.IsolatedAsyncioTestCase):
         out = await mod.execute_query_async("SELECT 1")
         self.assertEqual(out, [{"X": 1}])
         mock_execute_query.assert_called_once()
-
-    @patch(f"{MODULE_UNDER_TEST}.execute_update")
-    async def test_execute_update_async_delegates(self, mock_execute_update):
-        mock_execute_update.return_value = 5
-        out = await mod.execute_update_async("UPDATE T SET A=1")
-        self.assertEqual(out, 5)
-        mock_execute_update.assert_called_once()
 
 
 class TestMcpToolsAndResources(unittest.IsolatedAsyncioTestCase):
@@ -248,48 +208,6 @@ class TestMcpToolsAndResources(unittest.IsolatedAsyncioTestCase):
         out = await mod.query_connx("SELECT * FROM T")
         self.assertIn("error", out)
         self.assertIn("no db", out["error"].lower())
-
-    # -----------------
-    # update_connx tool
-    # -----------------
-    async def test_update_connx_rejects_when_writes_disabled(self):
-        out = await mod.update_connx("update", "UPDATE T SET A=1")
-        self.assertIn("error", out)
-        self.assertIn("writes are disabled", out["error"].lower())
-
-    @patch(f"{MODULE_UNDER_TEST}.CONNX_ALLOW_WRITES", True)
-    async def test_update_connx_rejects_invalid_operation_when_writes_enabled(self):
-        out = await mod.update_connx("merge", "UPDATE T SET A=1")
-        self.assertIn("error", out)
-        self.assertIn("invalid operation", out["error"].lower())
-
-    @patch(f"{MODULE_UNDER_TEST}.CONNX_ALLOW_WRITES", True)
-    async def test_update_connx_requires_sql_keyword_match(self):
-        out = await mod.update_connx("update", "DELETE FROM T")
-        self.assertIn("error", out)
-        self.assertIn("must start with update", out["error"].lower())
-
-    @patch(f"{MODULE_UNDER_TEST}.CONNX_ALLOW_WRITES", True)
-    async def test_update_connx_rejects_semicolons_when_writes_enabled(self):
-        out = await mod.update_connx("update", "UPDATE T SET A=1; UPDATE T SET A=2")
-        self.assertIn("error", out)
-        self.assertIn("single sql statement", out["error"].lower())
-
-    @patch(f"{MODULE_UNDER_TEST}.CONNX_ALLOW_WRITES", True)
-    @patch(f"{MODULE_UNDER_TEST}.execute_update_async")
-    async def test_update_connx_success_when_writes_enabled(self, mock_exec):
-        mock_exec.return_value = 7
-        out = await mod.update_connx("update", "UPDATE T SET A=1")
-        self.assertEqual(out["affected_rows"], 7)
-        self.assertIn("completed successfully", out["message"].lower())
-
-    @patch(f"{MODULE_UNDER_TEST}.CONNX_ALLOW_WRITES", True)
-    @patch(f"{MODULE_UNDER_TEST}.execute_update_async")
-    async def test_update_connx_error_when_writes_enabled(self, mock_exec):
-        mock_exec.side_effect = ValueError("bad update")
-        out = await mod.update_connx("delete", "DELETE FROM T")
-        self.assertIn("error", out)
-        self.assertIn("bad update", out["error"].lower())
 
     # -------------------
     # count_customers tool
@@ -454,6 +372,13 @@ class TestMcpToolsAndResources(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(out["total"], 123)
         self.assertEqual(out["table"], "daea_Mainframe_VSAM.dbo.CUSTOMERS_VSAM")
+
+
+class TestReadOnlyMode(unittest.TestCase):
+    def test_write_helpers_are_not_exposed(self):
+        self.assertFalse(hasattr(mod, "execute_update"))
+        self.assertFalse(hasattr(mod, "execute_update_async"))
+        self.assertFalse(hasattr(mod, "update_connx"))
 
 
 if __name__ == "__main__":

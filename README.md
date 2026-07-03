@@ -10,7 +10,6 @@
 - [Usage](#usage)
 - [Sample MCP Tools](#mcp-tools)
   - [`query_connx`](#query_connx)
-  - [`update_connx`](#update_connx)
   - [`find_customers`](#find_customers)
 - [MCP Client Examples](#mcp-client-examples)
 - [Extending MCP Tools](#extending-mcp-tools)
@@ -28,7 +27,7 @@ Contact Demos Economacos (demos.economacos (at) softwareag.com) for any question
 ## Features
 
 - ODBC connection to CONNX for unified database access.
-- MCP tools: For example `query_connx`, `update_connx`.
+- MCP tools: For example `query_connx`, `find_customers`, and `count_customers`.
 - Resources: Schema discovery.
 - Async support for efficiency.
 
@@ -39,7 +38,7 @@ Contact Demos Economacos (demos.economacos (at) softwareag.com) for any question
   - For Windows: CONNX ODBC Driver.
   - For Linux: unixODBC with CONNX driver
 - Valid CONNX DSN (Data Source Name) configured in your system
-- Database and CONNX credentials with appropriate read/write permissions
+- Database and CONNX credentials with appropriate read permissions
 
 ## Installation
 
@@ -137,6 +136,8 @@ The sample CDD is pre-configured to connect to the **DAEA mainframe VSAM files**
 
 This approach allows you to leverage existing CONNX infrastructure to expose mainframe VSAM data through the MCP interface without manual SQL schema definitions.
 
+**Important CDD Safety Guidance**: Configure the CONNX CDD and related database access so the exposed objects are `SELECT`-only. Even though this sample MCP server is read-only, the safest setup is to enforce read-only behavior in CONNX and with database permissions as well, so accidental inserts, updates, or deletes are blocked below the MCP layer.
+
 ## Usage
 
 This server is designed to be launched by an MCP host (e.g., Claude Desktop) using stdio transport. See  [Integrate in MCP Host Config](#integrate-in-mcp-host-config)
@@ -187,41 +188,6 @@ Executes a SQL SELECT statement against a CONNX-connected database and returns t
 SELECT CUSTOMER_ID, CUSTOMER_NAME
 FROM CUSTOMERS
 WHERE STATE = 'CA'
-```
-
----
-
-### `update_connx`
-
-**Purpose**
-Executes data-modifying SQL statements (INSERT, UPDATE, DELETE) via CONNX.
-
-**Parameters**
-
-- `operation` (str): One of insert, update, delete
-- `query` (str): Full SQL statement
-
-**Behavior**
-
-- Validates the operation type before execution
-- Executes inside a transaction
-- Commits on success, rolls back on failure
-
-**Return format**
-
-```json
-{
-  "affected_rows": 5,
-  "message": "Update completed successfully."
-}
-```
-
-**Example**
-
-```sql
-UPDATE CUSTOMERS
-SET STATUS = 'INACTIVE'
-WHERE LAST_LOGIN < '2022-01-01'
 ```
 
 ---
@@ -284,20 +250,6 @@ Below are examples of how MCP-compatible clients (such as Claude Desktop or othe
   }
 }
 ```
-
-### Example: Batch Update
-
-```json
-{
-  "tool": "update_connx",
-  "arguments": {
-    "operation": "update",
-    "query": "UPDATE INVENTORY SET STATUS = 'REORDER' WHERE QUANTITY < REORDER_LEVEL"
-  }
-}
-```
-
----
 
 ## VSAM COBOL File Layouts
 
@@ -363,8 +315,6 @@ CONNX Demo Database Server Tools:
 Core Query Tools
 
 - **query_connx** - Execute SELECT queries (read-only, single statement)
-- **update_connx** - Execute INSERT/UPDATE/DELETE operations (requires `CONNX_ALLOW_WRITES=true`)
-
 Customer-Specific Tools
 
 - **count_customers** - Return total number of customers
@@ -468,7 +418,7 @@ This opens a web UI where you can:
 
 **Permission Denied**
 
-- Verify database user has appropriate SELECT/UPDATE/INSERT/DELETE privileges
+- Verify database user has appropriate SELECT privileges
 - Check firewall rules for database access
 
 **Timeout Errors**
@@ -626,7 +576,7 @@ In Claude Desktop, you can test the integration by asking:
 - "Query the CUSTOMERS table from CONNX"
 - "Show me the first 5 records from the ORDERS table"
 
-If the server is properly configured, Claude will be able to use the `query_connx` and `update_connx` tools to interact with your CONNX databases.
+If the server is properly configured, Claude will be able to use the read-only MCP tools such as `query_connx` to interact with your CONNX databases.
 
 ### Troubleshooting Claude Desktop Integration
 
@@ -657,7 +607,7 @@ CONNX communicates with VSAM on the z/OS Mainframe.
 ## Summary
 
 - `query_connx` is used for read-only SQL queries
-- `update_connx` is used for data modification
+- The MCP tool surface is read-only by design
 - Tools are asynchronous, safe, and testable
 - Extending the toolset follows a simple, repeatable pattern
 - CI and test coverage protect against regressions
@@ -672,7 +622,7 @@ Adding new tools is intentionally simple and testable.
 
 1. Create a Python function
 2. Decorate it with `@mcp.tool()`
-3. Call existing helper functions (`execute_query_async`, `execute_update_async`)
+3. Call existing helper functions such as `execute_query_async`
 4. Return a JSON-serializable dictionary
 
 **Example: Add a `count_connx` Tool**
@@ -776,9 +726,8 @@ This bidirectional flow ensures efficient, secure interactions. Real-world examp
 
 ### Data Operations
 
-- **Bulk Updates**: "Update all inactive customers who haven't logged in since 2022"
 - **Data Validation**: "Check for duplicate customer records and show me conflicts"
-- **Data Migration**: "Extract customer data from legacy system and prepare for transformation"
+- **Data Migration Support**: "Extract customer data from legacy system and prepare for transformation"
 
 ### Enterprise Integrations
 
@@ -799,6 +748,7 @@ This bidirectional flow ensures efficient, secure interactions. Real-world examp
 - **Input Sanitization**: All queries are sanitized to prevent SQL injection attacks
 - **Parameterized Queries**: Use parameterized execution where possible
 - **Least Privilege**: Grant database users only necessary permissions
+- **CDD Configuration**: Configure the CONNX CDD to expose `SELECT`-only access wherever possible
 - **Audit Logging**: Enable CONNX audit logs to track all database operations
 - **Credential Management**: Use environment variables or secret management services (AWS Secrets Manager, Azure Key Vault)
 - **Network Security**: Use VPN or private networks for database connections

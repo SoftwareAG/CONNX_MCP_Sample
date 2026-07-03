@@ -22,7 +22,7 @@ No backporting is provided.
 This project follows these guiding principles:
 * 	Safe by default
 * 	Least privilege
-* 	Explicit enablement for destructive actions
+* 	Read-only data access
 * 	No trust in AI-generated SQL
 * 	Defense in depth
 
@@ -49,14 +49,9 @@ Read Operations
 * 	Queries must produce a result set
 
 Write Operations
-*	Writes are disabled by default
-*	Enabling writes requires:
-
-CONNX_ALLOW_WRITES=true
-
-
-*	Only INSERT, UPDATE, and DELETE operations are permitted
-*	Single-statement enforcement applies to all write queries
+* 	INSERT, UPDATE, and DELETE tools are not exposed by this server
+* 	The MCP interface is intentionally read-only to prevent accidental data changes
+* 	Use database credentials with SELECT-only permissions where possible
 
 ---
 

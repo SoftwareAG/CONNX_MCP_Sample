@@ -17,9 +17,6 @@ CONNX_DSN = os.getenv("CONNX_DSN")
 CONNX_USER = os.getenv("CONNX_USER")
 CONNX_PASS = os.getenv("CONNX_PASS")
 
-# Optional security controls
-CONNX_ALLOW_WRITES = os.getenv("CONNX_ALLOW_WRITES", "false").strip().lower() == "true"
-
 # Result limits
 def _env_int(name: str, default: int, minimum: int = 1) -> int:
     try:
@@ -110,11 +107,6 @@ def _is_select_only(sql: str) -> bool:
     return s.startswith("select")
 
 
-def _first_keyword(sql: str) -> str:
-    """Return the first keyword/token of the SQL (lowercased)."""
-    return (sql or "").lstrip().split(" ", 1)[0].lower()
-
-
 def _effective_limit(requested: Optional[int]) -> int:
     """Clamp requested row limit to the configured maximum."""
     if requested and requested > 0:
@@ -181,31 +173,6 @@ def execute_query(
         conn.close()
 
 
-async def execute_update_async(query: str, params: Optional[List[Any]] = None) -> int:
-    """Asynchronous execution of UPDATE/INSERT/DELETE."""
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, execute_update, query, params)
-
-
-def execute_update(query: str, params: Optional[List[Any]] = None) -> int:
-    """Execute non-SELECT query and return affected rows."""
-    conn = get_connx_connection()
-    fp = _sql_fingerprint(query)
-    try:
-        cursor = conn.cursor()
-        cursor.execute(query, params or [])
-        affected = cursor.rowcount
-        conn.commit()
-        logger.info("Update OK fp=%s affected=%s", fp, affected)
-        return int(affected) if affected is not None else 0
-    except pyodbc.Error as e:
-        conn.rollback()
-        logger.error("Update failed fp=%s err=%s", fp, e)
-        raise ValueError(f"Update execution failed: {str(e)}")
-    finally:
-        conn.close()
-
-
 # MCP Tools
 @mcp.tool()
 async def query_connx(query: str) -> Dict[str, Any]:
@@ -224,35 +191,6 @@ async def query_connx(query: str) -> Dict[str, Any]:
     try:
         results = await execute_query_async(query, max_rows=MAX_RESULT_ROWS)
         return {"results": results, "count": len(results)}
-    except ValueError as e:
-        return {"error": str(e)}
-
-
-@mcp.tool()
-async def update_connx(operation: str, query: str) -> Dict[str, Any]:
-    """
-    Perform update operations via CONNX.
-
-    Security:
-    - Writes are disabled unless CONNX_ALLOW_WRITES=true.
-    - Enforces single-statement execution.
-    """
-    if not CONNX_ALLOW_WRITES:
-        return {"error": "Writes are disabled. Set CONNX_ALLOW_WRITES=true to enable update operations."}
-
-    op = operation.strip().lower()
-    if op not in ["insert", "update", "delete"]:
-        return {"error": "Invalid operation. Must be 'insert', 'update', or 'delete'."}
-
-    if _first_keyword(query) != op:
-        return {"error": f"SQL must start with {op.upper()} for this operation."}
-
-    if not _is_single_statement(query):
-        return {"error": "Only a single SQL statement is allowed (no semicolons)."}
-
-    try:
-        affected = await execute_update_async(query)
-        return {"affected_rows": affected, "message": f"{operation.capitalize()} completed successfully."}
     except ValueError as e:
         return {"error": str(e)}
 
