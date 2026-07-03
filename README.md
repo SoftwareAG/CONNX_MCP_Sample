@@ -30,6 +30,7 @@ Contact Demos Economacos (demos.economacos (at) softwareag.com) for any question
 - MCP tools: For example `query_connx`, `find_customers`, and `count_customers`.
 - Resources: Schema discovery.
 - Async support for efficiency.
+- Optional split-server pattern: run separate MCP servers for VSAM and Adabas demos to keep tool routing clear.
 
 ## Prerequisites
 
@@ -99,11 +100,14 @@ Create a `.env` file in the project root. The easiest way is to copy `.env.examp
 
 ```dotenv
 CONNX_DSN=your_connx_dsn_name
+CONNX_DSN_ADABAS=your_adabas_dsn_name
 CONNX_USER=your_username
 CONNX_PASS=your_password
 CONNX_TIMEOUT=30
 CONNX_MAX_ROWS=1000
 ```
+
+`CONNX_DSN` is used by the VSAM-focused sample server in `connx_server.py`. `CONNX_DSN_ADABAS` is reserved for a separate Adabas-focused server entrypoint in `connx_server_adabas.py`.
 
 ### Connection String Format
 
@@ -143,6 +147,15 @@ This approach allows you to leverage existing CONNX infrastructure to expose mai
 This server is designed to be launched by an MCP host (e.g., Claude Desktop) using stdio transport. See  [Integrate in MCP Host Config](#integrate-in-mcp-host-config)
 
 You typically do not run the Python code manually except for smoke testing.
+
+### Separate VSAM and Adabas Servers
+
+For demos that target multiple backends, the simplest setup is to run separate MCP servers instead of combining everything into one tool surface:
+
+- `connx_server.py`: VSAM-focused server with purpose-built demo tools
+- `connx_server_adabas.py`: Adabas-focused read-only server for `EMPLOYEES` and `VEHICLES`, plus schema discovery
+
+This keeps Claude from having to guess between VSAM-specific and Adabas-specific datasets when both are available in the same host.
 
 ---
 
@@ -296,7 +309,7 @@ The CONNX MCP demo uses 3 Mainframe VSAM datasets. COBOL copybooks were used to 
 
 ---
 
-## Sample Questions
+## Sample VSAM Questions
 
 - How many customers do we have in total?
 - Which customers live in California?
@@ -305,6 +318,18 @@ The CONNX MCP demo uses 3 Mainframe VSAM datasets. COBOL copybooks were used to 
 - Show me details for customer Z3375.
 - Do we have any customers missing phone numbers?
 - What products are most frequently ordered by customers?
+
+### Sample Adabas Questions
+
+- How many employees do we have in the Adabas server?
+- How many vehicles are assigned in the Adabas server?
+- Show me employee details for personnel ID `50005600`.
+- Show me vehicles for employee `50005600`.
+- Which departments have the most vehicles?
+- Which departments have the most leased vehicles?
+- Which countries have the most assigned vehicles?
+- Show me employees in Paris.
+- What vehicle makes appear most often?
 
 ---
 
@@ -361,6 +386,39 @@ Resources (not tools, but available via MCP resources)
 - `count_entities` - Entity counts with natural language
 
 The tools follow a pattern of providing both low-level SQL access (`query_connx`) and high-level purpose-built tools for common operations.
+
+### Adabas Tool Summary
+
+If you run `connx_server_adabas.py`, the Adabas-focused server exposes read-only tools around `EMPLOYEES` and `VEHICLES`.
+
+Core Adabas tools
+
+- `query_connx` - Execute read-only SELECT queries against the Adabas DSN
+- `describe_server` - Return Adabas server metadata and advertised capabilities
+
+Adabas entity tools
+
+- `count_employees` - Count employee records
+- `count_vehicles` - Count vehicle records
+- `get_employee` - Return a single employee by `PERSONNEL_ID`
+- `get_vehicles_for_employee` - List vehicles assigned to one employee
+- `find_employees_by_city` - Find employees by city
+- `employees_with_vehicles` - Return joined employee and vehicle rows
+
+Adabas analytics tools
+
+- `vehicles_by_department` - Count assigned vehicles by department
+- `leased_vehicles_by_department` - Count leased vehicles by department
+- `vehicles_by_country` - Count assigned vehicles by employee country
+- `vehicle_summary_by_make` - Count vehicles by make
+
+Adabas metadata tools/resources
+
+- `describe_entities` - Describe the `employees` and `vehicles` entities
+- `count_entities` - Count rows for a known Adabas entity alias
+- `schema://domain/employees` - Employee metadata
+- `schema://domain/vehicles` - Vehicle metadata
+- `semantic://entities` - Employee/vehicle relationship metadata
 
 ---
 
@@ -602,6 +660,21 @@ This example queries a Mainframe VSAM file. Claude Desktop formulates the SQL st
 CONNX communicates with VSAM on the z/OS Mainframe.
 
 ![img.png](images/select_customers.png)
+---
+
+## Example Adabas Questions for Claude
+
+When `connx_server_adabas.py` is configured in Claude Desktop, these prompts are good demo starters:
+
+- "How many employees are in the Adabas server?"
+- "Show me vehicles by department."
+- "Which departments have the most leased vehicles?"
+- "Show me vehicles assigned to personnel ID 50005600."
+- "Find employees in Paris."
+- "Which countries have the most company vehicles?"
+
+These tend to steer Claude toward the purpose-built Adabas tools instead of raw SQL.
+
 ---
 
 ## Summary
