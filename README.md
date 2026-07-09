@@ -83,7 +83,7 @@ If you are using Visual Studio Code, these steps usually make the setup smoother
    - `Terminal -> New Terminal`
    - If the virtual environment is not already active, activate it with the same command shown in the Installation section
 5. Run a quick smoke test from the VS Code terminal:
-   - Windows: `python .\scripts\smoke.py`
+   - Windows: `.\.venv\Scripts\python.exe .\scripts\smoke.py`
    - macOS/Linux: `python ./scripts/smoke.py`
 
 Helpful tips:
@@ -433,10 +433,14 @@ This project uses pytest for unit testing. Tests mock database interactions to r
 
 - Make sure your virtual environment is activated first.
 - Install test deps: `pip install -r requirements-dev.txt`
-- Run tests: `pytest tests/`
-- Command line smoke test: `python -c "from dotenv import load_dotenv; load_dotenv(); from connx_server import get_connx_connection; c=get_connx_connection(); print('OK'); c.close()"`
+- Run tests:
+  - Windows: `.\.venv\Scripts\python.exe -m pytest tests/`
+  - macOS/Linux: `python -m pytest tests/`
+- Command line smoke test:
+  - Windows: `.\.venv\Scripts\python.exe -c "from dotenv import load_dotenv; load_dotenv(); from connx_server import get_connx_connection; c=get_connx_connection(); print('OK'); c.close()"`
+  - macOS/Linux: `python -c "from dotenv import load_dotenv; load_dotenv(); from connx_server import get_connx_connection; c=get_connx_connection(); print('OK'); c.close()"`
 - Run Python smoke test:
-  - Windows: `python .\scripts\smoke.py`
+  - Windows: `.\.venv\Scripts\python.exe .\scripts\smoke.py`
   - macOS/Linux: `python ./scripts/smoke.py`
 
 Coverage includes connection handling, query/update execution, sanitization, and MCP tools/resources.

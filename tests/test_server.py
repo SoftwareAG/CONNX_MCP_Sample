@@ -1,11 +1,16 @@
 # tests/test_server.py
 import importlib
 import os
+from pathlib import Path
 import sys
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pyodbc
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 MODULE_UNDER_TEST = "connx_server"
 
