@@ -752,6 +752,14 @@ When `connx_server_adabas.py` is configured in Claude Desktop, these prompts are
 These tend to steer Claude toward the purpose-built Adabas tools instead of raw SQL.
 
 ---
+## Example query using Claude Desktop
+
+This example queries Mainframe Adabas files Employees and Vehicles. Claude Desktop formulates the SQL statement that is passed to CONNX.
+CONNX communicates with Adabas on the z/OS Mainframe.
+
+![img.png](images/employee_vehicle.png)
+---
+
 
 ## Summary
 
